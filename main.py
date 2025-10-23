@@ -2,10 +2,12 @@ import streamlit as st
 
 from os.path import join, dirname, abspath
 
-from helpers.pickling import pickle2repo
-from helpers.repos import get_repo_names
-from models.db import Repository
-from plots.correlations import correlation_plot
+from src.helpers.pickling import pickle2repo
+from src.helpers.repos import get_repo_names
+from src.models.db import Repository
+from src.plots.correlations import correlation_plot
+from src.plots.timelines import timelines_plot, timelines_statistics
+from src.plots.init import compute_vals
 
 
 # Initialization
@@ -25,6 +27,9 @@ if "current_workflows" not in st.session_state:
 
 if "selected_workflows" not in st.session_state:
     st.session_state["selected_workflows"] = {}
+    
+if "results_repos" not in st.session_state:
+    st.session_state["results_repos"] = {}
 
 
 # Callbacks
@@ -76,11 +81,10 @@ body_container = st.container(gap="large")
 header_container = body_container.container(horizontal=True, horizontal_alignment="center")
 filter_container = body_container.container()
 workflows_container = filter_container.container(horizontal=True, vertical_alignment="bottom")
-plots_container = body_container.container()
 
 
 _ = header_container.image(
-    image=join(dirname(abspath(__file__)), "../static/vectors/logo.svg"),
+    image=join(dirname(abspath(__file__)), "./static/vectors/logo.svg"),
     width=100,
 )
 _ = header_container.title("Kleio")
@@ -99,21 +103,47 @@ _ = workflows_container.multiselect(
     label="Workflows",
     options=st.session_state["current_workflows"],
     placeholder="Select workflows",
-    disabled=not len(st.session_state["selected_repos"]) == 1,
+    disabled=len(st.session_state["selected_repos"]) != 1,
     help="Single workflows can only be selected only with one repository. If multiple repositories are selected, all of their workflows will be selected.",
     on_change=get_workflows,
     key="selected_workflows_options",
 )
 
 
-_ = filter_container.pills(
-    label="Plot type",
-    options=["Correlations"],
-    default="Correlations",
-)
+timelines, corrs, = st.tabs(["Timelines", "Correlations"])
 
-
-plots_container.write("#### Plots")
-
-for repo, workflows in st.session_state["selected_workflows"].items():
-    correlation_plot(repo, workflows)
+if len(st.session_state["selected_workflows"]) > 0:
+    for repo, workflows in st.session_state["selected_workflows"].items():
+        st.session_state["results_repos"][repo] = compute_vals(workflows)
+        
+    with timelines:
+        statistics_plots = st.container()
+        statistics_plots.write("#### Statistics")
+        
+        timelines_statistics()
+        
+        plot_header_container = st.container(horizontal=True, vertical_alignment="center")
+        plot_header_container.write("#### Plots")
+        show_timelines = plot_header_container.toggle(label="Show plots")
+    
+        if show_timelines:
+            for repo, workflows in st.session_state["results_repos"].items():
+                timelines_plot(repo, workflows)
+    
+    with corrs:
+        st.write("#### Filters")
+        
+        axis_select_container = st.container(horizontal=True)
+        
+        _ = axis_select_container.selectbox(
+            label="Y Axis",
+            options=["% of dependency changes", "# of dependency changes"],
+            key="correlations_y_filter",
+        )
+        
+        st.write("#### Plots")
+    
+        for repo, workflows in st.session_state["results_repos"].items():
+            correlation_plot(repo, workflows)
+else:
+    st.write("Please select at least one workflow")

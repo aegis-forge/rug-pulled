@@ -35,20 +35,20 @@ style = "normal"
 weight = 400
 
 [theme]
-primaryColor = "#17A34A"           # Warm, professional accent color
-backgroundColor = "#F9F9F9"        # Soft cream background - easy on the eyes
-secondaryBackgroundColor = "#F9F9F9"  # Subtle contrast for cards/sections
-textColor = "#3d3a2a"             # Dark brown - readable but not harsh black
-linkColor = "#3d3a2a"             # Keep links consistent with text
-borderColor = "#EDEDED"           # Gentle borders that define
-showWidgetBorder = true           # Clean widget definition
-baseRadius = "0.6rem"             # Subtle rounded corners - modern feel
-font = "SpaceGrotesk"             # Apply your custom font to body text
-headingFont = "SpaceGroteskHeader" # Headers get the semibold treatment
-codeFont = "SpaceMono"            # Monospace for code blocks
-codeBackgroundColor = "#ecebe4"   # Code gets subtle background highlight
-showSidebarBorder = true          # Clean sidebar separation
+primaryColor = "#F4AA41"
+backgroundColor = "#F9F9F9"
+secondaryBackgroundColor = "#F9F9F9"
+textColor = "#3d3a2a"
+linkColor = "#3d3a2a"
+borderColor = "#EDEDED"
+showWidgetBorder = true
+baseRadius = "0.6rem"
+font = "SpaceGrotesk"
+headingFont = "SpaceGroteskHeader"
+codeFont = "SpaceMono"
+codeBackgroundColor = "#ecebe4"
+showSidebarBorder = true
 
 [theme.sidebar]
-backgroundColor = "#e8e7dd"        # Sidebar slightly darker than main
+backgroundColor = "#e8e7dd"
 secondaryBackgroundColor = "#ecebe3"

@@ -5,7 +5,7 @@ from os.path import join, dirname, abspath
 from pickle import load, dump, HIGHEST_PROTOCOL
 from tqdm import tqdm
 
-from models.db import Commit, Repository, Workflow
+from ..models.db import Commit, Repository, Workflow
 from .db import connect, get_workflow_commits, get_commit_dependencies
 
 

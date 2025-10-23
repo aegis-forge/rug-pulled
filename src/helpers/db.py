@@ -2,7 +2,7 @@ from os.path import join, dirname, abspath
 from dotenv import dotenv_values
 from neo4j import GraphDatabase, Session
 
-from models.db import Dependency
+from ..models.db import Dependency
 
 
 PER_PAGE = 100
