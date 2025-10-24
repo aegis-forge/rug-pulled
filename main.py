@@ -1,5 +1,6 @@
 import streamlit as st
 
+from dotenv import dotenv_values
 from os.path import join, dirname, abspath
 
 from src.helpers.pickling import pickle2repo
@@ -11,7 +12,9 @@ from src.plots.init import compute_vals
 
 
 # Initialization
-repo_names = get_repo_names()
+params = dotenv_values(join(dirname(abspath(__file__)), ".env"))
+
+repo_names = get_repo_names(params)
 current_repos: list[Repository] = []
 
 st.set_page_config(layout="wide")
@@ -111,6 +114,9 @@ _ = workflows_container.multiselect(
 
 
 timelines, corrs, = st.tabs(["Timelines", "Correlations"])
+
+if len(st.session_state["selected_workflows"]) == 0: 
+    st.session_state["results_repos"] = {}
 
 if len(st.session_state["selected_workflows"]) > 0:
     for repo, workflows in st.session_state["selected_workflows"].items():

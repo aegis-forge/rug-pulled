@@ -72,21 +72,21 @@ def timelines_statistics() -> None:
 
 
 def timelines_plot(repo_name: str, workflows: dict[str, dict[str, str]]) -> None:
-    st.write(f"##### {repo_name}")
+    st.write(f"##### {repo_name} _({len(workflows)} workflows)_")
 
     workflows_container = st.container(gap="medium")
 
     for workflow, values in workflows.items():
         trend_arrow = "="
         
-        if not isnan(values['trend'][1]) and values['trend'][1] <= 0.1:
+        if values['trend'][1] <= 0.1:
             if 0 < values['trend'][0] <= .5:
                 trend_arrow = "▲"
             elif .5 < values['trend'][0] <= 1:
                 trend_arrow = "⏫︎"
             elif -.5 <= values['trend'][0] < 0:
                 trend_arrow = "▼"
-            elif -1 <= values['trend'][0] < .5:
+            elif -1 <= values['trend'][0] < -.5:
                 trend_arrow = "⏬︎"
         
         workflow_plots = workflows_container.container(gap="small")
@@ -95,7 +95,7 @@ def timelines_plot(repo_name: str, workflows: dict[str, dict[str, str]]) -> None
         tau = values['trend'][0] if not isnan(values['trend'][0]) else 0.0
         p_value = values['trend'][1] if not isnan(values['trend'][1]) else 0.0
         
-        _ = workflow_name.write(f"###### {workflow}")
+        _ = workflow_name.write(f"###### {workflow} _({len(values['shas'])} commits)_")
         _ = workflow_name.text(f"Trend: {trend_arrow}", help=f"τ = {tau}, p-value = {p_value}")
 
         col1, col2 = workflow_plots.columns(2)

@@ -1,46 +1,55 @@
 from datetime import datetime
+from pathlib import Path
+from neo4j.exceptions import ServiceUnavailable
 from neotime import DateTime
-from os import makedirs
-from os.path import join, dirname, abspath
+from os import listdir, mkdir
+from os.path import join, dirname, abspath, isdir
 from pickle import load, dump, HIGHEST_PROTOCOL
 from tqdm import tqdm
 
 from ..models.db import Commit, Repository, Workflow
-from .db import connect, get_workflow_commits, get_commit_dependencies
+from .db import connect, get_all_repositories, get_repository_workflows, get_workflow_commits, get_commit_dependencies
 
 
-def repos2pickles():
-    sess = connect()
-    works = get_workflow_commits(sess)
+def repos2pickles(env: dict[str, str]):
+    sess = connect(env)
     
-    makedirs(join(dirname(abspath(__file__)), "../../repositories"), exist_ok=True)
+    if sess is None and env["MODE"] == "debug": return
+    elif not sess: raise ServiceUnavailable
     
-    repositories: dict[str, Repository] = {}
+    pickles_dir = join(dirname(abspath(__file__)), "../../repositories")
     
-    for workflow, commits in tqdm(works.items(), desc="Retrieving Workflows"):
-        repo_name = '/'.join(workflow.split("/")[:2])
-        workflow_name = workflow.split("/")[-1]
+    if not isdir(pickles_dir): mkdir(pickles_dir)
+    if len(listdir(pickles_dir)) == len(get_all_repositories(sess)): return
+    
+    for repository in tqdm(get_all_repositories(sess), desc="Getting repositories"):
+        if f"{repository.replace('/', '::')}.pickle" in listdir(pickles_dir): continue
         
-        if repo_name not in repositories:
-            repositories[repo_name] = Repository(repo_name, {})
-            
-        if workflow_name not in repositories[repo_name].workflows:
-            repositories[repo_name].workflows[workflow_name] = Workflow({})
+        repository_def = Repository(repository, {})
         
-        for commit in tqdm(sorted(commits, key=lambda el: el["date"]), leave=False, desc=f"Retrieving Commits for {workflow}"):
-            date: DateTime = commit["date"]
-            parsed = datetime(date.year, date.month, date.day, date.hour, date.minute, date.day)
+        for workflow in tqdm(get_repository_workflows(repository, sess), desc=f"Getting the workflows from {repository}", leave=False):
+            if Path(workflow).suffix != ".yaml" and Path(workflow).suffix != ".yml": continue
             
-            repositories[repo_name].workflows[workflow_name].commits[commit["name"]] = Commit(
-                parsed,
-                get_commit_dependencies(f"{workflow}/{commit['name']}", sess)
-            )
-
-    for name, repository in repositories.items():
-        with open(join(dirname(abspath(__file__)), f"../../repositories/{name.replace('/', '::')}.pickle"), "wb") as file:
-            dump(repository, file, protocol=HIGHEST_PROTOCOL)
+            if workflow not in repository_def.workflows:
+                repository_def.workflows[workflow] = Workflow({})
+            
+            for commit in tqdm(get_workflow_commits(f"{repository}/{workflow}", sess), desc=f"Getting the commits from {workflow}", leave=False):
+                date: DateTime = commit[1]
+                parsed = datetime(date.year, date.month, date.day, date.hour, date.minute, date.day)
+                
+                repository_def.workflows[workflow].commits[commit[0]] = Commit(
+                    parsed,
+                    get_commit_dependencies(f"{repository}/{workflow}/{commit[0]}", sess)
+                )
+            
+        with open(join(dirname(abspath(__file__)), f"../../repositories/{repository.replace('/', '::')}.pickle"), "wb") as file:
+            dump(repository_def, file, protocol=HIGHEST_PROTOCOL)
             
 
 def pickle2repo(file_name: str) -> Repository:
     with open(join(dirname(abspath(__file__)), f"../../repositories/{file_name}.pickle"), "rb") as file:
         return load(file)
+        
+        
+if __name__ == "__main__":
+    repos2pickles()

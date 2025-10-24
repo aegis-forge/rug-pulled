@@ -1,56 +1,69 @@
-from os.path import join, dirname, abspath
-from dotenv import dotenv_values
 from neo4j import GraphDatabase, Session
+from neo4j.exceptions import ServiceUnavailable
 
 from ..models.db import Dependency
 
 
-PER_PAGE = 100
+PER_PAGE = 1000
 
 
-def connect() -> Session:
-    params = dotenv_values(
-        join(dirname(abspath(__file__)), "../.env")
-    )
+def connect(env: dict[str, str]) -> Session:
+    URI: str = str(env["NEO_URI"])
+    AUTH: tuple[str, str] = (str(env["NEO_USER"]), str(env["NEO_PASS"]))
 
-    URI: str = str(params["NEO_URI"])
-    AUTH: tuple[str, str] = (str(params["NEO_USER"]), str(params["NEO_PASS"]))
+    try:
+        driver = GraphDatabase.driver(URI, auth=AUTH)
+        session = driver.session()
+        
+        session.run("Match () Return 1 Limit 1")
 
-    driver = GraphDatabase.driver(URI, auth=AUTH)
-    session = driver.session()
+        return session
+    except ServiceUnavailable:
+        return None
+    
 
-    return session
-
-
-def get_all_workflows(session: Session, page: int = 1) -> dict[str, list[str]]:
+def get_all_repositories(session: Session) -> list[str]:
     repositories = session.run(
         """
-        MATCH (r:Repository)-[]->(w:Workflow)
-        RETURN r.full_name AS name, collect(w.name) AS workflows
+        MATCH (r:Repository)
+        RETURN r.full_name AS repo
+        """,
+    )
+    
+    return [repo["repo"] for repo in repositories]
+
+
+def get_repository_workflows(repository: str, session: Session, page: int = 1) -> list[str]:
+    repositories = session.run(
+        """
+        MATCH (r:Repository {full_name: $repo})-[]->(w:Workflow)
+        RETURN w.name AS workflows
         SKIP $skip
         LIMIT $limit
         """,
+        repo=repository,
         skip=(page - 1) * PER_PAGE,
         limit=PER_PAGE,
     )
 
-    return {repository["name"]: repository["workflows"] for repository in repositories}
+    return [repository["workflows"] for repository in repositories]
 
 
-def get_workflow_commits(session: Session, page: int = 1) -> dict[str, list[dict[str, str]]]:
+def get_workflow_commits(workflow: str,session: Session, page: int = 1) -> list[dict[str, str]]:
     workflows = session.run(
         """
-        MATCH (w:Workflow)-[]->(c:Commit)
-        WITH w, collect({name: c.name, date: c.date}) AS commits
-        RETURN w.full_name AS name, commits
+        MATCH (w:Workflow {full_name: $workflow})-[]->(c:Commit)
+        RETURN c.name AS name, c.date AS date
+        ORDER BY date
         SKIP $skip
         LIMIT $limit
         """,
+        workflow=workflow,
         skip=(page - 1) * PER_PAGE,
         limit=PER_PAGE,
     )
 
-    return {workflow["name"]: workflow["commits"] for workflow in workflows}
+    return [(workflow["name"], workflow["date"]) for workflow in workflows]
 
 
 def get_commit_dependencies(full_commit: str, session: Session) -> dict[str, dict[str, Dependency]]:

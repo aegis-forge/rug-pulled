@@ -5,13 +5,13 @@ import plotly.express as ex
 def correlation_plot(repo_name: str, workflows: dict[str, dict[str, str]]) -> None:
     y_filter = st.session_state["correlations_y_filter"]
 
-    st.write(f"##### {repo_name}")
+    st.write(f"##### {repo_name} _({len(workflows)} workflows)_")
 
     workflows_container = st.container(gap="medium")
 
     for workflow, values in workflows.items():
         workflow_plots = workflows_container.container(gap="small")
-        workflow_plots.write(f"###### {workflow}")
+        workflow_plots.write(f"###### {workflow} _({len(values['shas'])} commits)_")
 
         col1, col2 = workflow_plots.columns(2)
         col3, col4 = workflow_plots.columns(2)

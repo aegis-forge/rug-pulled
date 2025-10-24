@@ -1,13 +1,13 @@
 from os import listdir
-from os.path import join, dirname, abspath, splitext, isdir
+from os.path import join, dirname, abspath, splitext
 
 from .pickling import repos2pickles
 
 
-def get_repo_names() -> list[str]:
+def get_repo_names(env: dict[str, str]) -> list[str]:
+    repos2pickles(env)
+    
     pickles_dir = join(dirname(abspath(__file__)), "../../repositories")
+    pickle_files = [splitext(pickle)[0].replace("::", "/") for pickle in listdir(pickles_dir)]
 
-    if not isdir(pickles_dir): repos2pickles()
-    if len(listdir(pickles_dir)) == 0: repos2pickles()
-
-    return [splitext(pickle)[0].replace("::", "/") for pickle in listdir(pickles_dir)]
+    return pickle_files
