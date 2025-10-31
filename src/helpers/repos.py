@@ -1,13 +1,17 @@
 from os import listdir
 from os.path import join, dirname, abspath, splitext
+from pickle import load
 
-from .pickling import repos2pickles
+from ..models.neo import Repository
 
 
-def get_repo_names(env: dict[str, str]) -> list[str]:
-    repos2pickles(env)
-    
+def get_repo_names() -> list[str]:
     pickles_dir = join(dirname(abspath(__file__)), "../../repositories")
     pickle_files = [splitext(pickle)[0].replace("::", "/") for pickle in listdir(pickles_dir)]
 
     return pickle_files
+
+
+def pickle2repo(file_name: str) -> Repository:
+    with open(join(dirname(abspath(__file__)), f"../../repositories/{file_name}.pickle"), "rb") as file:
+        return load(file)

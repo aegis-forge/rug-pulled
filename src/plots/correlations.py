@@ -1,6 +1,84 @@
 import streamlit as st
 import plotly.express as ex
 
+from hashlib import sha256
+
+
+def _correlation_check(values: dict[str, str]):
+    actions_diff: list[int] = values["actions_diff"]
+    actions_changes: list[int] = values["actions_changes"]
+    non_user_changes: list[int] = [sum(x) for x in zip(values["non_user_action_upgrades"], values["non_user_action_downgrades"])]
+    abs_diff: list[int] = values["dependencies_abs_diff"]
+    shas: list[int] = values["shas"]
+    
+    return [
+        s
+        for x, y, z, i, s in zip(actions_diff, actions_changes, non_user_changes, abs_diff, shas)
+        if i != 0 and abs(x) + abs(y) + abs(z) == 0
+    ]
+    
+
+def compute_rug_pulls() -> dict[str, list[str]]:
+    values = st.session_state["results_repos"]
+    rug_pulled: dict[str, list[str]] = {
+        "Commit": [],
+        "Non User Changes": [],
+        "Dep. Changes": [],
+        "Vulnerable Dep. Changes": [],
+        "Introduced Vulnerabilities": [],
+    }
+    
+    for repo, workflows in values.items():
+        for workflow, data in workflows.items():
+            for index in range(len(data["shas"])):
+                if (data["non_user_action_upgrades"][index] > 0 or data["non_user_action_downgrades"][index] < 0) \
+                    and data["actions_changes"][index] == 0 \
+                    and data["actions_diff"][index] <= 0 \
+                    and data["vuln_dependencies_abs_diff"][index] > 0:
+                        filepath = st.session_state["selected_repos"][repo].workflows[workflow].filepath
+                        hash_digest = sha256(f"{filepath}".encode('utf-8')).hexdigest()
+                        link = f"https://github.com/{repo}/commit/{data["shas"][index]}#diff-{hash_digest}"
+                        
+                        rug_pulled["Commit"].append(f"[{repo}/{workflow}/{data["shas"][index]}]({link}) :material/link:")
+                        rug_pulled["Non User Changes"].append(
+                            f"+{data["non_user_action_upgrades"][index]}/" +
+                            f"{"-" if data["non_user_action_downgrades"][index] == 0 else ""}{data["non_user_action_downgrades"][index]}"
+                        )
+                        rug_pulled["Dep. Changes"].append(
+                            f"{"+" if data["dependencies_abs_diff"][index] > 0 else ""}{data["dependencies_abs_diff"][index]}" +
+                            f" ({"+" if data["dependencies_prop_diff"][index] > 0 else ""}{data["dependencies_prop_diff"][index]}%)"
+                        )
+                        rug_pulled["Vulnerable Dep. Changes"].append(
+                            f"+{data["vuln_dependencies_abs_diff"][index]}" +
+                            f" (+{data["vuln_dependencies_prop_diff"][index]}%)"
+                        )
+                        
+                        indirect_deps = {
+                            name: dependency
+                            for name, dependency in st.session_state["selected_workflows"][repo][workflow].commits[data["shas"][index]].dependencies["indirect"].items()
+                            if len(dependency.vulnerabilities) > 0
+                        }
+                        
+                        if index > 0:
+                            prev_indirect_deps = {
+                                name: dependency
+                                for name, dependency in st.session_state["selected_workflows"][repo][workflow].commits[data["shas"][index-1]].dependencies["indirect"].items()
+                                if len(dependency.vulnerabilities) > 0
+                            }
+                            
+                            deps_changes = set(indirect_deps.keys()) - set(prev_indirect_deps.keys())
+                            new_vulns = {name: vuln["cvss"] for change in deps_changes for name, vuln in indirect_deps[change].vulnerabilities.items()}
+                        else:
+                            new_vulns = {name: vuln["cvss"] for change in indirect_deps.values() for name, vuln in change.vulnerabilities.items()}
+                            
+                        rug_pulled_vulns = ""
+                        
+                        for n, s in new_vulns.items():
+                            rug_pulled_vulns += f"- {n} (CVSS {s})\n"
+                
+                        rug_pulled["Introduced Vulnerabilities"].append(rug_pulled_vulns)
+    return rug_pulled
+
 
 def correlation_plot(repo_name: str, workflows: dict[str, dict[str, str]]) -> None:
     y_filter = st.session_state["correlations_y_filter"]
@@ -10,8 +88,36 @@ def correlation_plot(repo_name: str, workflows: dict[str, dict[str, str]]) -> No
     workflows_container = st.container(gap="medium")
 
     for workflow, values in workflows.items():
+        if len(values["shas"]) == 0: continue
+        
         workflow_plots = workflows_container.container(gap="small")
-        workflow_plots.write(f"###### {workflow} _({len(values['shas'])} commits)_")
+        workflow_plots_title_container = workflow_plots.container(gap="small", horizontal=True, vertical_alignment="center")
+        
+        corr_check = _correlation_check(values)
+        
+        workflow_plots_title_container.write(f"###### {workflow} _({len(values['shas'])} commits)_")
+        
+        if len(corr_check) > 0:
+            st.session_state["corr_check_stats"].append(f"{repo_name}/{workflow}")
+            
+            _ = workflow_plots_title_container.badge(
+                label="Corr. Check",
+                icon=":material/close:",
+                color="red"
+            )
+            
+            _ = workflow_plots_title_container.text(
+                body="",
+                help=f"Problematic commits: {[s for s in corr_check]}"
+            )
+        else:
+            st.session_state["corr_check_stats"].append("")
+            
+            _ =  workflow_plots_title_container.badge(
+                label="Corr. Check",
+                icon=":material/check:",
+                color="green"
+            )
 
         col1, col2 = workflow_plots.columns(2)
         col3, col4 = workflow_plots.columns(2)

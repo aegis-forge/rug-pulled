@@ -68,9 +68,11 @@ class Commit:
 
 
 class Workflow:
+    filepath: str
     commits: dict[str, Commit]
 
-    def __init__(self, commits: dict[str, Commit]) -> None:
+    def __init__(self, filepath: str, commits: dict[str, Commit]) -> None:
+        self.filepath = filepath
         self.commits = commits
         
 

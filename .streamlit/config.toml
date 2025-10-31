@@ -1,17 +1,17 @@
 [server]
-enableStaticServing = true  # This lets Streamlit serve your custom fonts
+enableStaticServing = true
 
 # Define your custom font families
 [[theme.fontFaces]]
-family = "SpaceGrotesk"  # Main body font - clean, modern sans-serif
+family = "SpaceGrotesk"
 url = "app/static/fonts/SpaceGrotesk-VariableFont_wght.ttf"
 
 [[theme.fontFaces]]
-family = "SpaceGroteskHeader"  # Headers get their own weight
+family = "SpaceGroteskHeader"
 url = "app/static/fonts/SpaceGrotesk-SemiBold.ttf"
 
 [[theme.fontFaces]]
-family = "SpaceMono"  # Code font - monospace for readability
+family = "SpaceMono"
 url = "app/static/fonts/SpaceMono-Bold.ttf"
 style = "normal"
 weight = 700

@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase, Session
 from neo4j.exceptions import ServiceUnavailable
 
-from ..models.db import Dependency
+from ..models.neo import Dependency
 
 
 PER_PAGE = 1000
@@ -14,8 +14,6 @@ def connect(env: dict[str, str]) -> Session:
     try:
         driver = GraphDatabase.driver(URI, auth=AUTH)
         session = driver.session()
-        
-        session.run("Match () Return 1 Limit 1")
 
         return session
     except ServiceUnavailable:
@@ -37,7 +35,7 @@ def get_repository_workflows(repository: str, session: Session, page: int = 1) -
     repositories = session.run(
         """
         MATCH (r:Repository {full_name: $repo})-[]->(w:Workflow)
-        RETURN w.name AS workflows
+        RETURN w.name AS workflows, w.path AS path
         SKIP $skip
         LIMIT $limit
         """,
@@ -46,7 +44,7 @@ def get_repository_workflows(repository: str, session: Session, page: int = 1) -
         limit=PER_PAGE,
     )
 
-    return [repository["workflows"] for repository in repositories]
+    return {repository["workflows"]: repository["path"] for repository in repositories}
 
 
 def get_workflow_commits(workflow: str,session: Session, page: int = 1) -> list[dict[str, str]]:
