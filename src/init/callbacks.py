@@ -49,13 +49,15 @@ def get_workflows():
                 ss["selected_repos"][repo_name].workflows[workflow]
             )
 
-def change_page(where, max_pages=0):
+def change_page(key: str, where: int, max_pages: int = 0):
     match where:
         case 0:
-            ss["curr_page_timelines"] = 1
+            ss[key] = 1
         case 1:
-            ss["curr_page_timelines"] -= 1
+            ss[key] -= 1
         case 2:
-            ss["curr_page_timelines"] += 1
+            ss[key] += 1
         case 3:
-            ss["curr_page_timelines"] = max_pages
+            ss[key] = max_pages
+        case _:
+            return

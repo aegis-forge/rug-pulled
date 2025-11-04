@@ -2,18 +2,14 @@ import streamlit as st
 
 from os.path import join, dirname, abspath
 
+from src.components.correlations import make_rug_pulls_component
 from src.components.timelines import make_timelines_component, make_statistics_component
 from src.init.variables import init_session_variables
 from src.init.callbacks import options_select, get_workflows
-from src.plots.correlations import correlation_plot, compute_rug_pulls
 from src.plots.init import compute_vals
 
 
 # Initialization
-st.set_page_config(
-    page_title="kleio", page_icon="./static/vectors/favicon.svg", layout="wide"
-)
-
 ss = st.session_state
 init_session_variables()
 
@@ -56,10 +52,7 @@ _ = workflows_container.multiselect(
 )
 
 
-(
-    timelines,
-    corrs,
-) = st.tabs(["Timelines", "Correlations"])
+timelines, corrs = st.tabs(["Timelines", "Correlations"])
 
 if len(ss["selected_workflows"]) == 0:
     ss["results_repos"] = {}
@@ -72,21 +65,7 @@ if len(ss["selected_workflows"]) > 0:
         make_statistics_component()
         make_timelines_component()
     with corrs:
-        pass
-        # rug_pulls: dict[str, list[str]] = {}
-        # rug_pulls = compute_rug_pulls()
-
-        # rug_pulled_workflows_title = st.container(horizontal=True, vertical_alignment="center")
-        # rug_pulled_workflows_title.write("#### Rug-Pulled Workflow Commits")
-        # _ = rug_pulled_workflows_title.text(
-        #     "",
-        #     help="Rug-pulled workflow commits are those commits where the maintainers of" +
-        #     " the used Actions upgrade/downgrade their versions. By doing so, they introduce" +
-        #     " vulnerabilities in the workflow. Workflow maintainers do not introduce these" +
-        #     " vulnerabilities directly."
-        # )
-
-        # _ = st.table(rug_pulls, border="horizontal")
+        make_rug_pulls_component()
 
         # st.write("#### Correlation Checks")
         # corr_check_container = st.container(horizontal=True, horizontal_alignment="left", gap="large")

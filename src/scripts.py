@@ -11,7 +11,7 @@ from .models.neo import Commit, Repository, Workflow
 from .helpers.queries import connect, get_all_repositories, get_repository_workflows, get_workflow_commits, get_commit_dependencies
 
 
-if __name__ == "__main__":
+def _get_repos():
     sess = connect(dotenv_values(join(dirname(abspath(__file__)), "../.env")))
     
     pickles_dir = join(dirname(abspath(__file__)), "../repositories")
@@ -46,3 +46,10 @@ if __name__ == "__main__":
         with open(join(dirname(abspath(__file__)), f"../repositories/{repository.replace('/', '::')}.pickle"), "wb") as file:
             dump(repository_def, file, protocol=HIGHEST_PROTOCOL)
             file.close
+            
+
+# def _precomputed_stats():
+#     pass
+
+if __name__ == "__main__":
+    _get_repos()

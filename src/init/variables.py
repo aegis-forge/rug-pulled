@@ -4,6 +4,12 @@ from ..helpers.repos import get_repo_names
 
 
 def init_session_variables() -> None:
+    st.set_page_config(
+        page_title="kleio",
+        page_icon="./static/vectors/favicon.svg",
+        layout="wide",
+    )
+    
     if "repo_names" not in st.session_state:
         st.session_state["repo_names"] = sorted(get_repo_names())
     
@@ -27,3 +33,6 @@ def init_session_variables() -> None:
         
     if "curr_page_timelines" not in st.session_state:
         st.session_state["curr_page_timelines"] = 1
+        
+    if "curr_page_rug_pulls" not in st.session_state:
+        st.session_state["curr_page_rug_pulls"] = 1
