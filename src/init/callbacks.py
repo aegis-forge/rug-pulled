@@ -2,14 +2,11 @@ import streamlit as st
 
 from ..helpers.repos import pickle2repo
 
-
 ss = st.session_state
 
+
 def options_select():
-    if (
-        "selected_repos_options" not in ss
-        or "selected_workflows_options" not in ss
-    ):
+    if "selected_repos_options" not in ss or "selected_workflows_options" not in ss:
         return
 
     if "All" in ss["selected_repos_options"]:
@@ -33,7 +30,7 @@ def options_select():
             ss["selected_workflows"][repo] = repo_obj.workflows
 
         ss["current_workflows"].extend(list(repo_obj.workflows.keys()))
-        
+
     ss["current_workflows"].sort()
 
 
@@ -45,9 +42,10 @@ def get_workflows():
 
     for workflow in ss["selected_workflows_options"]:
         if workflow in workflow_names:
-            ss["selected_workflows"][repo_name][workflow] = (
-                ss["selected_repos"][repo_name].workflows[workflow]
-            )
+            ss["selected_workflows"][repo_name][workflow] = ss["selected_repos"][
+                repo_name
+            ].workflows[workflow]
+
 
 def change_page(key: str, where: int, max_pages: int = 0):
     match where:

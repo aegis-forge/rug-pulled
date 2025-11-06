@@ -28,6 +28,12 @@ def init_session_variables() -> None:
     if "results_repos" not in st.session_state:
         st.session_state["results_repos"] = {}
         
+    if "rug_pulls" not in st.session_state:
+        st.session_state["rug_pulls"] = {}
+        
+    if "cut_rug_pulls" not in st.session_state:
+        st.session_state["cut_rug_pulls"] = {}
+        
     if "corr_check_stats" not in st.session_state:
         st.session_state["corr_check_stats"] = []
         

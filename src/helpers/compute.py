@@ -1,13 +1,12 @@
-from altair.vegalite.v5.api import value
-import streamlit as st
-
 from datetime import datetime
 from hashlib import sha256
+
+import streamlit as st
 from pandas import DataFrame
 from scipy.stats import kendalltau
 
 from ..models.neo import Dependency, Workflow
-
+from ..models.rugs import Fix, Rugpull
 
 ss = st.session_state
 
@@ -122,184 +121,225 @@ def compute_trend_category(
 
 
 def _compute_rug_pulled_dependencies(
-    workflows: list[Workflow],
-) -> dict[str, dict[str, Dependency]]:
-    rug_pulled_dependencies: dict[str, dict[str, Dependency]] = {}
+    repo_name: str, workflows: dict[str, Workflow]
+) -> list[Rugpull]:
+    rug_pulled_actions: list[Rugpull] = []
 
     for workflow_name, workflow in workflows.items():
         pos = -1
-        prev_actions: int = -1
+        prev_commit_sha: str = ""
         vuln_prev_dependencies: dict[str, Dependency] = {}
         prev_user_versions: dict[str, Dependency] = {}
 
         for commit_sha, commit in workflow.commits.items():
-            changes = 0
-            non_user_upgrades = 0
-            non_user_downgrades = 0
-
-            actions = commit.dependencies["direct"]
             vuln_indirect_deps = {
-                key: value
-                for key, value in commit.dependencies["indirect"].items()
-                if len(value.vulnerabilities) > 0
+                key: dep
+                for key, dep in commit.dependencies["indirect"].items()
+                if len(dep.vulnerabilities) > 0
             }
 
+            if pos == -1:
+                vuln_prev_dependencies = vuln_indirect_deps
+                prev_commit_sha = commit_sha
+                pos += 1
+
+                continue
+
             for name, dep in commit.dependencies["direct"].items():
-                if name in prev_user_versions:
-                    prev = prev_user_versions[name]
-                    changes += 1 if dep.version != prev.version else 0
+                if name not in prev_user_versions:
+                    prev_user_versions[name] = dep
 
-                    if dep.date and prev.date:
-                        if dep.version != prev.version:
-                            non_user_upgrades += 0
-                            non_user_downgrades -= 0
+                prev = prev_user_versions[name]
 
-                        non_user_upgrades += 1 if dep.date > prev.date else 0
-                        non_user_downgrades -= 1 if dep.date < prev.date else 0
+                if not dep.date or not prev.date:
+                    continue
+
+                if dep.version == prev.version and dep.date != prev.date:
+                    current_action_vulns = {
+                        key: dep
+                        for key, dep in vuln_indirect_deps.items()
+                        if dep.parent == name
+                    }
+
+                    prev_action_vulns = {
+                        key: dep
+                        for key, dep in vuln_prev_dependencies.items()
+                        if dep.parent == name
+                    }
+
+                    new_vulnerable_deps = {
+                        key: dep
+                        for key, dep in current_action_vulns.items()
+                        if key not in prev_action_vulns
+                    }
+
+                    if len(new_vulnerable_deps) == 0:
+                        continue
+
+                    filepath = workflow.filepath
+                    hash_digest: str = sha256(f"{filepath}".encode("utf-8")).hexdigest()
+                    link_from = f"https://github.com/{repo_name}/commit/{prev_commit_sha}#diff-{hash_digest}"
+                    link_to = f"https://github.com/{repo_name}/commit/{commit_sha}#diff-{hash_digest}"
+
+                    rug_pulled_actions.append(
+                        Rugpull(
+                            location=f"{repo_name}/{workflow_name}/{commit_sha}",
+                            from_commit=f"{repo_name}/{workflow_name}/{prev_commit_sha}",
+                            links=(link_from, link_to),
+                            action=(name, dep),
+                            vulnerabilities=new_vulnerable_deps,
+                            introduced=dep.date,
+                            downgrade=dep.date < prev.date,
+                        )
+                    )
 
                 prev_user_versions[name] = dep
 
-            vuln_abs_diff = 0
-
-            if len(vuln_prev_dependencies) != 0:
-                vuln_abs_diff = len(vuln_indirect_deps) - len(vuln_prev_dependencies)
-
-            if pos != -1:
-                if (
-                    (non_user_upgrades > 0 or non_user_downgrades < 0)
-                    and changes == 0
-                    and len(actions) - len(prev_actions) <= 0
-                    and vuln_abs_diff > 0
-                ):
-                    rug_pulled_dependencies[f"{workflow_name}::{commit_sha}"] = {
-                        key: value
-                        for key, value in vuln_indirect_deps.items()
-                        if key not in vuln_prev_dependencies
-                    }
-
             vuln_prev_dependencies = vuln_indirect_deps
-            prev_actions = actions
+            prev_commit_sha = commit_sha
             pos += 1
 
-    return rug_pulled_dependencies
+        for rug_pull in rug_pulled_actions:
+            if (
+                "/".join(rug_pull.location.split("/")[:3])
+                != f"{repo_name}/{workflow_name}"
+            ):
+                break
+
+            shas_sorted = sorted(workflow.commits.items(), key=lambda x: x[1].date)
+            shas = [item[0] for item in shas_sorted]
+            begin = shas.index(rug_pull.location.split("/")[-1]) + 1
+
+            for commit in shas_sorted[begin:]:
+                if rug_pull.fix:
+                    break
+
+                vuln_indirect_deps = {
+                    key: dep
+                    for key, dep in commit[1].dependencies["indirect"].items()
+                    if len(dep.vulnerabilities) > 0
+                }
+
+                curr_action_vulns = {
+                    key: dep
+                    for key, dep in vuln_indirect_deps.items()
+                    if dep.parent == rug_pull.action[0]
+                }
+
+                if rug_pull.action[0] not in commit[1].dependencies["direct"]:
+                    rug_pull.fix = Fix(
+                        sha=commit[0],
+                        version=None,
+                        date=commit[1].date,
+                        ttf=commit[1].date - rug_pull.introduced,
+                        who="Maintainer",
+                    )
+
+                    continue
+
+                curr_action = commit[1].dependencies["direct"][rug_pull.action[0]]
+                vuln_action = rug_pull.action[1]
+
+                if not curr_action.date or not vuln_action.date:
+                    continue
+
+                if (
+                    vuln_action.date == curr_action.date
+                    and vuln_action.version == curr_action.version
+                ):
+                    continue
+
+                actions_diff = [
+                    dep
+                    for dep in rug_pull.vulnerabilities.keys()
+                    if dep in curr_action_vulns
+                ]
+
+                who = (
+                    "Action"
+                    if vuln_action.version == curr_action.version
+                    else "Workflow"
+                )
+                date = curr_action.date if who == "Action" else commit[1].date
+
+                if len(actions_diff) == 0:
+                    rug_pull.fix = Fix(
+                        sha=commit[0],
+                        version=curr_action.version,
+                        date=date,
+                        ttf=date - rug_pull.introduced,
+                        who=who,
+                    )
+
+    return rug_pulled_actions
 
 
-def compute_rug_pulls(page: int = 1) -> DataFrame:
-    values = st.session_state["results_repos"]
+def compute_rug_pulls() -> DataFrame:
     rug_pulls: dict[str, list[str]] = {
         "#": [],
+        "Action": [],
         "Commit": [],
-        "Non User Changes": [],
-        "Actions": [],
+        "Date(s)": [],
         "Introduced Vulnerabilities": [],
+        "Fixed By": [],
+        "TTF (days)": [],
     }
 
-    for repo_name, workflows in ss["selected_workflows"].items():
-        rug_pulled_dependencies = _compute_rug_pulled_dependencies(workflows)
+    ind = 1
 
-        for workflow_name, deps in rug_pulled_dependencies.items():
-            sorted_commits = sorted(
-                workflows[workflow_name.split("::")[0]].commits.items(),
-                key=lambda x: x[1].date,
+    for repo_name, workflows in ss["selected_workflows"].items():
+        for rug_pull in sorted(
+            _compute_rug_pulled_dependencies(repo_name, workflows),
+            key=lambda x: x.location,
+        ):
+            rug_pulls["#"].append(str(ind))
+            rug_pulls["Action"].append(
+                f"{rug_pull.action[0]}@{rug_pull.action[1].version}"
+                + f"{':red[:material/arrow_downward:]' if rug_pull.downgrade else ''}"
+            )
+            rug_pulls["Introduced Vulnerabilities"].append(
+                "\n".join(
+                    [
+                        f"- **{dep_name}**: ({vuln_name} - CVSS: "
+                        + f":{_compute_cvss_color(vuln['cvss'])}"
+                        + f"[**{vuln['cvss']}**])"
+                        for dep_name, dep in rug_pull.vulnerabilities.items()
+                        for vuln_name, vuln in dep.vulnerabilities.items()
+                    ]
+                )
+            )
+            rug_pulls["Date(s)"].append(
+                f":red[{rug_pull.introduced.strftime('%d %b %Y %H:%M:%S')}]\n\n"
+                + f"{
+                    f':green[{rug_pull.fix.date.strftime("%d %b %Y %H:%M:%S")}]'
+                    if rug_pull.fix
+                    else ''
+                }"
+            )
+            rug_pulls["Commit"].append(
+                f"{'/'.join(rug_pull.from_commit.split('/')[0:-1])}\n\n"
+                + f"[{rug_pull.from_commit.split('/')[-1][:7]}"
+                + " :material/arrow_forward: "
+                + f"{rug_pull.location.split('/')[-1][:7]}]"
+                + f"({rug_pull.links[1]}) :material/open_in_new:"
+            )
+            rug_pulls["Fixed By"].append(
+                f"{rug_pull.fix.who + ' Maint.' if rug_pull.fix else '—'}"
+                + f"{
+                    ' (Removed)'
+                    if rug_pull.fix and not rug_pull.fix.version
+                    else ' (' + rug_pull.fix.version + ')'
+                    if rug_pull.fix and rug_pull.fix.who != 'Action'
+                    else ''
+                }"
+            )
+            rug_pulls["TTF (days)"].append(
+                rug_pull.fix.ttf.days if rug_pull.fix else "—"
             )
 
-            start = [el[0] for el in sorted_commits].index(workflow_name.split("::")[1])
+            ind += 1
 
-            for commit in [el[0] for el in sorted_commits][start:]:
-                pass
-
-    return DataFrame()
-
-    # curr_ind = 1
-    # for repo, workflows in values.items():
-    #     for workflow, data in workflows.items():
-    #         for index in range(len(data["shas"])):
-    #             if (
-    #                 (
-    #                     data["non_user_action_upgrades"][index] > 0
-    #                     or data["non_user_action_downgrades"][index] < 0
-    #                 )
-    #                 and data["actions_changes"][index] == 0
-    #                 and data["actions_diff"][index] <= 0
-    #                 and data["vuln_dependencies_abs_diff"][index] > 0
-    #             ):
-    #                 filepath = (
-    #                     st.session_state["selected_repos"][repo]
-    #                     .workflows[workflow]
-    #                     .filepath
-    #                 )
-    #                 hash_digest = sha256(f"{filepath}".encode("utf-8")).hexdigest()
-    #                 link = f"https://github.com/{repo}/commit/{data['shas'][index]}#diff-{hash_digest}"
-
-    #                 rug_pulls["Commit"].append(
-    #                     f"[{repo}/{workflow}/{data['shas'][index]}]({link}) :material/link:"
-    #                 )
-    #                 rug_pulls["Non User Changes"].append(
-    #                     f"+{data['non_user_action_upgrades'][index]}/"
-    #                     + f"{data['non_user_action_downgrades'][index]}"
-    #                 )
-    #                 # rug_pulls["Dep. Changes"].append(
-    #                 #     f"{'+' if data['dependencies_abs_diff'][index] > 0 else ''}{data['dependencies_abs_diff'][index]}"
-    #                 #     + f" ({'+' if data['dependencies_prop_diff'][index] > 0 else ''}{data['dependencies_prop_diff'][index]}%)"
-    #                 # )
-    #                 # rug_pulls["Vulnerable Dep. Changes"].append(
-    #                 #     f"+{data['vuln_dependencies_abs_diff'][index]}"
-    #                 #     + f" (+{data['vuln_dependencies_prop_diff'][index]}%)"
-    #                 # )
-
-    #                 indirect_deps = {
-    #                     name: dependency
-    #                     for name, dependency in st.session_state["selected_workflows"][
-    #                         repo
-    #                     ][workflow]
-    #                     .commits[data["shas"][index]]
-    #                     .dependencies["indirect"]
-    #                     .items()
-    #                     if len(dependency.vulnerabilities) > 0
-    #                 }
-
-    #                 if index > 0:
-    #                     prev_indirect_deps = {
-    #                         name: dependency
-    #                         for name, dependency in st.session_state[
-    #                             "selected_workflows"
-    #                         ][repo][workflow]
-    #                         .commits[data["shas"][index - 1]]
-    #                         .dependencies["indirect"]
-    #                         .items()
-    #                         if len(dependency.vulnerabilities) > 0
-    #                     }
-
-    #                     deps_changes = set(indirect_deps.keys()) - set(
-    #                         prev_indirect_deps.keys()
-    #                     )
-
-    #                     new_vulns = {
-    #                         name: vuln["cvss"]
-    #                         for change in deps_changes
-    #                         for name, vuln in indirect_deps[
-    #                             change
-    #                         ].vulnerabilities.items()
-    #                     }
-    #                 else:
-    #                     new_vulns = {
-    #                         name: vuln["cvss"]
-    #                         for change in indirect_deps.values()
-    #                         for name, vuln in change.vulnerabilities.items()
-    #                     }
-
-    #                 rug_pulled_vulns = ""
-
-    #                 for n, s in new_vulns.items():
-    #                     rug_pulled_vulns += (
-    #                         f"- {n} (CVSS **:{_compute_cvss_color(s)}[{s}]**)\n"
-    #                     )
-
-    #                 rug_pulls["Introduced Vulnerabilities"].append(rug_pulled_vulns)
-    #                 rug_pulls["#"].append(curr_ind)
-
-    #                 curr_ind += 1
-    # return DataFrame(rug_pulls).set_index("#")
+    return DataFrame(rug_pulls).set_index("#")
 
 
 def _compute_cvss_color(cvss: float) -> str:

@@ -2,7 +2,7 @@ import streamlit as st
 
 from os.path import join, dirname, abspath
 
-from src.components.correlations import make_rug_pulls_component
+from src.components.rugpulls import make_rug_pulls_component
 from src.components.timelines import make_timelines_component, make_statistics_component
 from src.init.variables import init_session_variables
 from src.init.callbacks import options_select, get_workflows
@@ -52,7 +52,7 @@ _ = workflows_container.multiselect(
 )
 
 
-timelines, corrs = st.tabs(["Timelines", "Correlations"])
+timelines, rugs = st.tabs(["Timelines", "Rug Pulls"])
 
 if len(ss["selected_workflows"]) == 0:
     ss["results_repos"] = {}
@@ -64,36 +64,7 @@ if len(ss["selected_workflows"]) > 0:
     with timelines:
         make_statistics_component()
         make_timelines_component()
-    with corrs:
+    with rugs:
         make_rug_pulls_component()
-
-        # st.write("#### Correlation Checks")
-        # corr_check_container = st.container(horizontal=True, horizontal_alignment="left", gap="large")
-
-        # st.write("#### Filters")
-
-        # axis_select_container = st.container(horizontal=True)
-
-        # _ = axis_select_container.selectbox(
-        #     label="Y Axis",
-        #     options=["% of dependency changes", "# of dependency changes"],
-        #     key="correlations_y_filter",
-        # )
-
-        # corr_header_container = st.container(horizontal=True)
-        # corr_header_container.write("#### Plots")
-        # show_corrs = corr_header_container.toggle(label="Show Correlation plots")
-
-        # if show_corrs:
-        #     ss["corr_check_stats"] = []
-        #     for repo, workflows in ss["results_repos"].items():
-        #         correlation_plot(repo, workflows)
-
-        # passing_checks: int = len(list(filter(lambda x: x == "", ss["corr_check_stats"])))
-        # failing_checks: list[int] = list(filter(lambda x: x != "", ss["corr_check_stats"]))
-
-        # _ = corr_check_container.metric(label="Passing", value=passing_checks, width="content")
-        # _ = corr_check_container.metric(label="Failing", value=len(failing_checks), help=f"{failing_checks if len(failing_checks) > 0 else ''}", width="content")
-        # _ = corr_check_container.metric(label="Total", value=len(ss["corr_check_stats"]), width="content")
 else:
     st.write("Please select at least one workflow")

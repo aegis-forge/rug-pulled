@@ -1,11 +1,10 @@
 import streamlit as st
-
 from streamlit.delta_generator import DeltaGenerator
 
 
 def make_metrics_components(
     labels: list[str],
-    values: list[int],
+    values: list[int | float],
     colors: list[str] | None = None,
     container: DeltaGenerator | None = None,
 ) -> None:
@@ -24,11 +23,13 @@ def make_metrics_components(
         )
 
     if not colors:
-        colors = ["black" for _ in range(len(labels))]
+        colors = ["" for _ in range(len(labels))]
 
     for label, value, color in zip(labels, values, colors):
+        colored_string = f":{color}[{label}]" if color != "" else label
+
         _ = container.metric(
-            label=f"**:{color}[{label}]**",
+            label=f"**{colored_string}**",
             value=value,
             width="content",
         )

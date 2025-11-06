@@ -11,13 +11,10 @@ def connect(env: dict[str, str]) -> Session:
     URI: str = str(env["NEO_URI"])
     AUTH: tuple[str, str] = (str(env["NEO_USER"]), str(env["NEO_PASS"]))
 
-    try:
-        driver = GraphDatabase.driver(URI, auth=AUTH)
-        session = driver.session()
+    driver = GraphDatabase.driver(URI, auth=AUTH)
+    session = driver.session()
 
-        return session
-    except ServiceUnavailable:
-        return None
+    return session
     
 
 def get_all_repositories(session: Session) -> list[str]:
