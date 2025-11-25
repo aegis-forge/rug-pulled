@@ -2,26 +2,59 @@ from datetime import datetime, timedelta
 
 from .neo import Dependency
 
+
 class Fix:
     sha: str
-    version: str | None
     date: datetime
-    ttf: timedelta
-    who: str
-    
+    versions: list[str]
+
     def __init__(
         self,
         sha: str,
-        version: str | None,
+        date: datetime,
+        versions: list[str],
+    ) -> None:
+        self.sha = sha
+        self.date = date
+        self.versions = versions
+
+
+class ActualFix(Fix):
+    version_type: str | None
+    ttf: timedelta
+    who: str
+
+    def __init__(
+        self,
+        sha: str,
+        version: list[str],
+        version_type: str | None,
         date: datetime,
         ttf: timedelta,
         who: str,
     ) -> None:
-        self.sha = sha
+        super().__init__(sha, date, version)
         self.version = version
-        self.date = date
+        self.version_type = version_type
         self.ttf = ttf
         self.who = who
+
+
+class PotentialFix(Fix):
+    dependencies: bool
+    tff: timedelta
+
+    def __init__(
+        self,
+        sha: str,
+        date: datetime,
+        versions: list[str],
+        tff: timedelta,
+        dependencies: bool = False,
+    ) -> None:
+        super().__init__(sha, date, versions)
+        self.tff = tff
+        self.dependencies = dependencies
 
 
 class Rugpull:
@@ -53,3 +86,11 @@ class Rugpull:
         self.introduced = introduced
         self.downgrade = downgrade
         self.fix = fix
+
+    def get_fix_category(self) -> str:
+        if type(self.fix) is ActualFix:
+            return "fixed"
+        elif type(self.fix) is PotentialFix:
+            return "fixable" if self.fix.dependencies else "dep_fixable"
+        else:
+            return "unfixable"

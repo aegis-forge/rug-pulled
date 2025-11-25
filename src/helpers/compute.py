@@ -1,12 +1,19 @@
+from ast import literal_eval
 from datetime import datetime
 from hashlib import sha256
+from os.path import abspath, dirname, isfile, join
+from typing import Any
 
 import streamlit as st
-from pandas import DataFrame
+from dotenv import dotenv_values
+from numpy import nan
+from pandas import DataFrame, read_csv
 from scipy.stats import kendalltau
+from tqdm import tqdm
 
+from ..helpers.queries import connect, get_first_fixed_commit, is_dependency_fixable
 from ..models.neo import Dependency, Workflow
-from ..models.rugs import Fix, Rugpull
+from ..models.rugs import ActualFix, PotentialFix, Rugpull
 
 ss = st.session_state
 
@@ -97,21 +104,21 @@ def compute_trend(workflow: Workflow, dependencies: bool = False) -> dict[str, f
 def compute_trend_category(
     tau: float, pvalue: float, threshold: float
 ) -> dict[str, str]:
-    trend_type = ":material/equal:"
+    trend_type = "equal"
     trend_color = "gray"
 
     if pvalue <= threshold and pvalue != 0:
         if -1 <= tau < -0.5:
-            trend_type = ":material/keyboard_double_arrow_down:"
+            trend_type = "keyboard_double_arrow_down"
             trend_color = "green"
         elif -0.5 <= tau < 0:
-            trend_type = ":material/keyboard_arrow_down:"
+            trend_type = "keyboard_arrow_down"
             trend_color = "green"
         elif 0 < tau <= 0.5:
-            trend_type = ":material/keyboard_arrow_up:"
+            trend_type = "keyboard_arrow_up"
             trend_color = "red"
         elif 0.5 < tau <= 1:
-            trend_type = ":material/keyboard_double_arrow_up:"
+            trend_type = "keyboard_double_arrow_up"
             trend_color = "red"
 
     return {
@@ -121,9 +128,11 @@ def compute_trend_category(
 
 
 def _compute_rug_pulled_dependencies(
-    repo_name: str, workflows: dict[str, Workflow]
+    repo_name: str,
+    workflows: dict[str, Workflow],
 ) -> list[Rugpull]:
     rug_pulled_actions: list[Rugpull] = []
+    session = connect(dotenv_values(join(dirname(abspath(__file__)), "../../.env")))
 
     for workflow_name, workflow in workflows.items():
         pos = -1
@@ -204,7 +213,11 @@ def _compute_rug_pulled_dependencies(
                 "/".join(rug_pull.location.split("/")[:3])
                 != f"{repo_name}/{workflow_name}"
             ):
-                break
+                continue
+
+            workflow = workflows[rug_pull.location.split("/")[2]]
+            sorted_workflows = sorted(workflow.commits.values(), key=lambda x: x.date)
+            last_date = sorted_workflows[-1].date
 
             shas_sorted = sorted(workflow.commits.items(), key=lambda x: x[1].date)
             shas = [item[0] for item in shas_sorted]
@@ -226,13 +239,20 @@ def _compute_rug_pulled_dependencies(
                     if dep.parent == rug_pull.action[0]
                 }
 
-                if rug_pull.action[0] not in commit[1].dependencies["direct"]:
-                    rug_pull.fix = Fix(
+                direct_versions = [
+                    (direct.version, direct.version_type)
+                    for name, direct in commit[1].dependencies["direct"].items()
+                    if name == rug_pull.action[0]
+                ]
+
+                if len(direct_versions) == 0:
+                    rug_pull.fix = ActualFix(
                         sha=commit[0],
-                        version=None,
+                        version=[],
+                        version_type=None,
                         date=commit[1].date,
                         ttf=commit[1].date - rug_pull.introduced,
-                        who="Maintainer",
+                        who="Workflow",
                     )
 
                     continue
@@ -263,95 +283,166 @@ def _compute_rug_pulled_dependencies(
                 date = curr_action.date if who == "Action" else commit[1].date
 
                 if len(actions_diff) == 0:
-                    rug_pull.fix = Fix(
+                    rug_pull.fix = ActualFix(
                         sha=commit[0],
-                        version=curr_action.version,
+                        version=[curr_action.version],
+                        version_type=curr_action.version_type,
                         date=date,
                         ttf=date - rug_pull.introduced,
                         who=who,
                     )
 
+            if not rug_pull.fix:
+                fix = get_first_fixed_commit(
+                    action=rug_pull.action[0],
+                    deps=list(rug_pull.vulnerabilities.keys()),
+                    date=rug_pull.introduced,
+                    session=session,
+                )
+
+                if fix and fix[0] < last_date:
+                    date = datetime(
+                        fix[0].year,
+                        fix[0].month,
+                        fix[0].day,
+                        fix[0].hour,
+                        fix[0].minute,
+                        fix[0].second,
+                    )
+
+                    if rug_pull.action[1].version in fix[1]:
+                        rug_pull.fix = ActualFix(
+                            sha=fix[2],
+                            version=[rug_pull.action[1].version],
+                            version_type=rug_pull.action[1].version_type,
+                            date=date,
+                            ttf=date - rug_pull.introduced,
+                            who="Action",
+                        )
+                    else:
+                        rug_pull.fix = PotentialFix(
+                            sha=fix[2],
+                            date=date,
+                            versions=fix[1],
+                            tff=date - rug_pull.introduced,
+                        )
+                else:
+                    fixable_deps_dates = [
+                        is_dependency_fixable(dep_name, dep.version)
+                        for dep_name, dep in rug_pull.vulnerabilities.items()
+                    ]
+
+                    if None not in fixable_deps_dates and len(fixable_deps_dates) > 0:
+                        fixable_deps_date = sorted(fixable_deps_dates)[-1]
+                        
+                        if fixable_deps_date < last_date:
+                            rug_pull.fix = PotentialFix(
+                                sha="",
+                                date=fixable_deps_date,
+                                versions=[],
+                                tff=fixable_deps_date - rug_pull.introduced,
+                                dependencies=True,
+                            )
+
     return rug_pulled_actions
 
 
 def compute_rug_pulls() -> DataFrame:
-    rug_pulls: dict[str, list[str]] = {
+    filepath = join(dirname(abspath(__file__)), "../../data/statistics/rug_pulls.csv")
+
+    if isfile(filepath) and st.session_state["selected_repos_options"][0] == "All":
+        df = read_csv(
+            filepath,
+            parse_dates=["date", "elapsed", "fix_date"],
+            date_format="%Y-%m-%d %H-%M-%S",
+        ).set_index("#")
+
+        df["elapsed"] = df["elapsed"].map(int)
+        df["vulns_list"] = df["vulns_list"].apply(lambda x: literal_eval(x))
+        df["vulns_severities"] = df["vulns_severities"].apply(lambda x: literal_eval(x))
+        df["fix_version"] = df["fix_version"].apply(lambda x: literal_eval(x))
+        df["date"] = df["date"].astype("datetime64[s]")
+        df["fix_date"] = df["fix_date"].astype("datetime64[s]")
+        df["last"] = df["last"].astype("datetime64[s]")
+
+        return df
+
+    rug_pulls: dict[str, list[Any]] = {
         "#": [],
-        "Action": [],
-        "Commit": [],
-        "Date(s)": [],
-        "Introduced Vulnerabilities": [],
-        "Fixed By": [],
-        "TTF (days)": [],
+        "action": [],
+        "version": [],
+        "version_type": [],
+        "version_used": [],
+        "date": [],
+        "repo": [],
+        "workflow": [],
+        "hash": [],
+        "vulns_list": [],
+        "vulns_severities": [],
+        "last": [],
+        "elapsed": [],
+        "fix_category": [],
+        "fix_date": [],
+        "fix_actor": [],
+        "fix_version": [],
+        "fix_v_type": [],
+        "fix_hash": [],
+        "ttf": [],
+        "ttpf": [],
     }
 
-    ind = 1
+    index = 0
 
-    for repo_name, workflows in ss["selected_workflows"].items():
-        for rug_pull in sorted(
-            _compute_rug_pulled_dependencies(repo_name, workflows),
-            key=lambda x: x.location,
-        ):
-            rug_pulls["#"].append(str(ind))
-            rug_pulls["Action"].append(
-                f"{rug_pull.action[0]}@{rug_pull.action[1].version}"
-                + f"{':red[:material/arrow_downward:]' if rug_pull.downgrade else ''}"
-            )
-            rug_pulls["Introduced Vulnerabilities"].append(
-                "\n".join(
-                    [
-                        f"- **{dep_name}**: ({vuln_name} - CVSS: "
-                        + f":{_compute_cvss_color(vuln['cvss'])}"
-                        + f"[**{vuln['cvss']}**])"
-                        for dep_name, dep in rug_pull.vulnerabilities.items()
-                        for vuln_name, vuln in dep.vulnerabilities.items()
-                    ]
-                )
-            )
-            rug_pulls["Date(s)"].append(
-                f":red[{rug_pull.introduced.strftime('%d %b %Y %H:%M:%S')}]\n\n"
-                + f"{
-                    f':green[{rug_pull.fix.date.strftime("%d %b %Y %H:%M:%S")}]'
-                    if rug_pull.fix
-                    else ''
-                }"
-            )
-            rug_pulls["Commit"].append(
-                f"{'/'.join(rug_pull.from_commit.split('/')[0:-1])}\n\n"
-                + f"[{rug_pull.from_commit.split('/')[-1][:7]}"
-                + " :material/arrow_forward: "
-                + f"{rug_pull.location.split('/')[-1][:7]}]"
-                + f"({rug_pull.links[1]}) :material/open_in_new:"
-            )
-            rug_pulls["Fixed By"].append(
-                f"{rug_pull.fix.who + ' Maint.' if rug_pull.fix else '—'}"
-                + f"{
-                    ' (Removed)'
-                    if rug_pull.fix and not rug_pull.fix.version
-                    else ' (' + rug_pull.fix.version + ')'
-                    if rug_pull.fix and rug_pull.fix.who != 'Action'
-                    else ''
-                }"
-            )
-            rug_pulls["TTF (days)"].append(
-                rug_pull.fix.ttf.days if rug_pull.fix else "—"
-            )
+    for repo_name, workflows in tqdm(ss["selected_workflows"].items()):
+        rug_pulls_raw = _compute_rug_pulled_dependencies(repo_name, workflows)
 
-            ind += 1
+        for rug_pull in rug_pulls_raw:
+            fix = rug_pull.fix
+            fixed = type(rug_pull.fix) is ActualFix
+            p_fix = type(rug_pull.fix) is PotentialFix
 
-    return DataFrame(rug_pulls).set_index("#")
+            vulnerable_deps = [
+                f"{dep_name}@v.{dep.version}"
+                for dep_name, dep in rug_pull.vulnerabilities.items()
+            ]
+            
+            vulnerable_severities = [
+                f"{vuln_name} - CVSS {vuln["cvss"]}"
+                for dep in rug_pull.vulnerabilities.values()
+                for vuln_name, vuln in dep.vulnerabilities.items()
+            ]
 
+            workflow = workflows[rug_pull.location.split("/")[2]]
+            sorted_workflows = sorted(workflow.commits.values(), key=lambda x: x.date)
+            last_date = sorted_workflows[-1].date
 
-def _compute_cvss_color(cvss: float) -> str:
-    color = "grey"
+            rug_pulls["#"].append(index + 1)
+            rug_pulls["action"].append(rug_pull.action[0])
+            rug_pulls["version"].append(rug_pull.action[1].version)
+            rug_pulls["version_type"].append(rug_pull.action[1].version_type)
+            rug_pulls["version_used"].append(rug_pull.action[1].uses)
+            rug_pulls["date"].append(rug_pull.introduced)
+            rug_pulls["repo"].append("/".join(rug_pull.location.split("/")[:2]))
+            rug_pulls["workflow"].append(rug_pull.location.split("/")[2])
+            rug_pulls["hash"].append(rug_pull.location.split("/")[-1])
+            rug_pulls["vulns_list"].append(vulnerable_deps)
+            rug_pulls["vulns_severities"].append(vulnerable_severities)
+            rug_pulls["elapsed"].append((last_date - rug_pull.introduced).days)
+            rug_pulls["last"].append(last_date)
+            rug_pulls["fix_category"].append(rug_pull.get_fix_category())
+            rug_pulls["fix_date"].append(fix.date if fix else nan)
+            rug_pulls["fix_actor"].append(fix.who if fixed else nan)
+            rug_pulls["fix_version"].append(fix.versions if fixed else [])
+            rug_pulls["fix_v_type"].append(fix.version_type if fixed else nan)
+            rug_pulls["fix_hash"].append(fix.sha if fix else nan)
+            rug_pulls["ttf"].append(fix.ttf.days if fixed else nan)
+            rug_pulls["ttpf"].append(fix.tff.days if p_fix else nan)
 
-    if 0.0 < cvss < 4.0:
-        color = "blue"
-    elif 4.0 <= cvss < 7.0:
-        color = "orange"
-    elif 7.0 <= cvss < 9.0:
-        color = "red"
-    elif 9.0 <= cvss <= 10.0:
-        color = "violet"
+            index += 1
 
-    return color
+    df = DataFrame(rug_pulls).set_index("#")
+
+    if st.session_state["selected_repos_options"][0] == "All":
+        df.to_csv(filepath)
+
+    return df

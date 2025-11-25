@@ -1,16 +1,16 @@
-FROM continuumio/miniconda3:25.3.1-1
+FROM continuumio/miniconda3:25.1.1-0
 
 WORKDIR /app
 
+COPY . .
+
 # Create environment
-COPY environment.yml .
-RUN conda env create -f envirnment.yml
+RUN conda env create -f environment.yml
 
 # Activate the conda environment
-RUN conda activate kleio
+SHELL ["conda", "run", "-n", "kleio", "/bin/bash", "-c"]
 
 # Expose port, healthcheck and start service
 EXPOSE 8501
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD curl --fail http://localhost:8501/_stcore/health
 
-ENTRYPOINT ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.0.0"]
+ENTRYPOINT ["conda", "run", "-n", "kleio", "streamlit", "run", "main.py"]

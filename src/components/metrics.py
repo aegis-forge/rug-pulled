@@ -6,6 +6,7 @@ def make_metrics_components(
     labels: list[str],
     values: list[int | float],
     colors: list[str] | None = None,
+    icons: bool | None = None,
     container: DeltaGenerator | None = None,
 ) -> None:
     if len(labels) != len(values):
@@ -26,10 +27,30 @@ def make_metrics_components(
         colors = ["" for _ in range(len(labels))]
 
     for label, value, color in zip(labels, values, colors):
-        colored_string = f":{color}[{label}]" if color != "" else label
-
-        _ = container.metric(
-            label=f"**{colored_string}**",
-            value=value,
+        label = label if not icons else f"""
+            <span
+                role="img"
+                aria-label="{label} icon"
+                style="
+                    display: inline-block;
+                    font-family: Material Symbols Rounded;
+                    font-weight: 400;
+                    user-select: none;
+                    vertical-align: bottom;
+                    white-space: nowrap;
+                    overflow-wrap: normal;
+                "
+            >
+                {label}
+            </span>
+        """
+        
+        container.html(
+            f"""
+            <strong style="color: {color}">{label}</strong>
+            <p style="font-size: 40px !important; margin-top: -8px !important">
+                {value}
+            </p>
+            """,
             width="content",
         )

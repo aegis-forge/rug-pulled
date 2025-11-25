@@ -1,4 +1,9 @@
+[client]
+toolbarMode = "viewer"
+
 [server]
+address="0.0.0.0"
+port=8501
 enableStaticServing = true
 
 # Define your custom font families

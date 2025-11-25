@@ -1,22 +1,21 @@
-import plotly.express as ex
-import streamlit as st
-
 from datetime import datetime
 from math import ceil
+from random import randint
+
+import plotly.express as ex
+import streamlit as st
 from plotly.graph_objects import Figure, Scatter
 from plotly.subplots import make_subplots
-from random import randint
 from streamlit.delta_generator import DeltaGenerator
 
-from .paging import make_paging_component
 from ..components.metrics import make_metrics_components
 from ..helpers.compute import (
     compute_dependencies,
-    compute_trend_category,
     compute_trend,
+    compute_trend_category,
 )
 from ..models.neo import Workflow
-
+from .paging import make_paging_component
 
 ss = st.session_state
 threshold = 0.1
@@ -43,14 +42,14 @@ def _make_plot_component(
     )
     _ = workflow_name_container.badge(
         label="Dep. Trend",
-        icon=trend_type["type"],
+        icon=f":material/{trend_type["type"]}:",
         color=trend_type["color"]
         if trend_type["type"] == ":material/equal:"
         else "blue",
     )
     _ = workflow_name_container.badge(
         label="Vuln. Trend",
-        icon=trend_type2["type"],
+        icon=f":material/{trend_type2["type"]}:",
         color=trend_type2["color"],
     )
     _ = workflow_name_container.text(
@@ -188,11 +187,11 @@ def make_statistics_component() -> None:
 
     metrics_colors = ["green", "green", "gray", "red", "red"]
     metrics_labels = [
-        ":material/keyboard_double_arrow_down:",
-        ":material/keyboard_arrow_down:",
-        ":material/equal:",
-        ":material/keyboard_arrow_up:",
-        ":material/keyboard_double_arrow_up:",
+        "keyboard_double_arrow_down",
+        "keyboard_arrow_down",
+        "equal",
+        "keyboard_arrow_up",
+        "keyboard_double_arrow_up",
     ]
 
     computed_trend_types = [
@@ -205,9 +204,10 @@ def make_statistics_component() -> None:
         for label in metrics_labels
     ]
 
-    make_metrics_components(metrics_labels, metrics_values, metrics_colors)
+    make_metrics_components(metrics_labels, metrics_values, metrics_colors, True)
 
     # ----------------------
+
     fig = make_subplots(rows=2, cols=1)
 
     fig = ex.scatter(
