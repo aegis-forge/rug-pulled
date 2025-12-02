@@ -923,11 +923,11 @@ def make_gantt_charts():
 
         st.plotly_chart(fig, key="/".join(workflow))
         
-        if '/'.join(workflow) == "adobe-consulting-services/acs-aem-commons/maven.yml":
-            fig.update_xaxes(showgrid=False, zeroline=False)
-            fig.update_yaxes(showgrid=True, zeroline=False)
+        # if '/'.join(workflow) == "adobe-consulting-services/acs-aem-commons/maven.yml":
+        #     fig.update_xaxes(showgrid=False, zeroline=False)
+        #     fig.update_yaxes(showgrid=True, zeroline=False)
         
-            write_image(fig, "./gantt.pdf", format="pdf", width=1000)
+        #     write_image(fig, "./gantt.pdf", format="pdf", width=1000)
 
         group += 1
 
