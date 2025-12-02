@@ -12,7 +12,8 @@ from scipy.stats import kendalltau
 from tqdm import tqdm
 
 from ..helpers.queries import connect, get_first_fixed_commit, is_dependency_fixable
-from ..models.neo import Dependency, Workflow
+from ..helpers.repos import pickle2repo
+from ..models.neo import Dependency, Repository, Workflow
 from ..models.rugs import ActualFix, PotentialFix, Rugpull
 
 ss = st.session_state
@@ -251,7 +252,7 @@ def _compute_rug_pulled_dependencies(
                         version=[],
                         version_type=None,
                         date=commit[1].date,
-                        ttf=commit[1].date - rug_pull.introduced,
+                        ttx=commit[1].date - rug_pull.introduced,
                         who="Workflow",
                     )
 
@@ -288,7 +289,7 @@ def _compute_rug_pulled_dependencies(
                         version=[curr_action.version],
                         version_type=curr_action.version_type,
                         date=date,
-                        ttf=date - rug_pull.introduced,
+                        ttx=date - rug_pull.introduced,
                         who=who,
                     )
 
@@ -316,7 +317,7 @@ def _compute_rug_pulled_dependencies(
                             version=[rug_pull.action[1].version],
                             version_type=rug_pull.action[1].version_type,
                             date=date,
-                            ttf=date - rug_pull.introduced,
+                            ttx=date - rug_pull.introduced,
                             who="Action",
                         )
                     else:
@@ -324,7 +325,7 @@ def _compute_rug_pulled_dependencies(
                             sha=fix[2],
                             date=date,
                             versions=fix[1],
-                            tff=date - rug_pull.introduced,
+                            ttpf=date - rug_pull.introduced,
                         )
                 else:
                     fixable_deps_dates = [
@@ -334,13 +335,13 @@ def _compute_rug_pulled_dependencies(
 
                     if None not in fixable_deps_dates and len(fixable_deps_dates) > 0:
                         fixable_deps_date = sorted(fixable_deps_dates)[-1]
-                        
-                        if fixable_deps_date < last_date:
+
+                        if rug_pull.introduced < fixable_deps_date < last_date:
                             rug_pull.fix = PotentialFix(
                                 sha="",
                                 date=fixable_deps_date,
                                 versions=[],
-                                tff=fixable_deps_date - rug_pull.introduced,
+                                ttpf=fixable_deps_date - rug_pull.introduced,
                                 dependencies=True,
                             )
 
@@ -348,9 +349,9 @@ def _compute_rug_pulled_dependencies(
 
 
 def compute_rug_pulls() -> DataFrame:
-    filepath = join(dirname(abspath(__file__)), "../../data/statistics/rug_pulls.csv")
+    filepath = join(dirname(abspath(__file__)), "../../data/rug_pulls.csv")
 
-    if isfile(filepath) and st.session_state["selected_repos_options"][0] == "All":
+    if isfile(filepath):
         df = read_csv(
             filepath,
             parse_dates=["date", "elapsed", "fix_date"],
@@ -387,13 +388,20 @@ def compute_rug_pulls() -> DataFrame:
         "fix_version": [],
         "fix_v_type": [],
         "fix_hash": [],
-        "ttf": [],
+        "ttx": [],
         "ttpf": [],
     }
 
     index = 0
 
-    for repo_name, workflows in tqdm(ss["selected_workflows"].items()):
+    for repo_name, workflows_raw in tqdm(ss["selected_workflows"].items()):
+        repo: Repository = pickle2repo(f"{repo_name.replace('/', '::')}")
+        workflows: dict[str, Workflow] = {
+            name: repo.workflows[name]
+            for name in workflows_raw
+            if name in repo.workflows
+        }
+
         rug_pulls_raw = _compute_rug_pulled_dependencies(repo_name, workflows)
 
         for rug_pull in rug_pulls_raw:
@@ -402,13 +410,13 @@ def compute_rug_pulls() -> DataFrame:
             p_fix = type(rug_pull.fix) is PotentialFix
 
             vulnerable_deps = [
-                f"{dep_name}@v.{dep.version}"
+                f"{dep_name}@v.{dep.version} - {dep.subtype}"
                 for dep_name, dep in rug_pull.vulnerabilities.items()
             ]
             
             vulnerable_severities = [
-                f"{vuln_name} - CVSS {vuln["cvss"]}"
-                for dep in rug_pull.vulnerabilities.values()
+                f"{dep_name} // {vuln_name} // {vuln["cvss"]}"
+                for dep_name, dep in rug_pull.vulnerabilities.items()
                 for vuln_name, vuln in dep.vulnerabilities.items()
             ]
 
@@ -435,14 +443,12 @@ def compute_rug_pulls() -> DataFrame:
             rug_pulls["fix_version"].append(fix.versions if fixed else [])
             rug_pulls["fix_v_type"].append(fix.version_type if fixed else nan)
             rug_pulls["fix_hash"].append(fix.sha if fix else nan)
-            rug_pulls["ttf"].append(fix.ttf.days if fixed else nan)
-            rug_pulls["ttpf"].append(fix.tff.days if p_fix else nan)
+            rug_pulls["ttx"].append(fix.ttx.days if fixed else nan)
+            rug_pulls["ttpf"].append(fix.ttpf.days if p_fix else nan)
 
             index += 1
 
     df = DataFrame(rug_pulls).set_index("#")
-
-    if st.session_state["selected_repos_options"][0] == "All":
-        df.to_csv(filepath)
+    df.to_csv(filepath)
 
     return df

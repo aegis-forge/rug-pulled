@@ -7,21 +7,25 @@ class Fix:
     sha: str
     date: datetime
     versions: list[str]
+    dep_fix_date: datetime | None
 
     def __init__(
         self,
         sha: str,
         date: datetime,
         versions: list[str],
+        dep_fix_date: datetime | None,
     ) -> None:
         self.sha = sha
         self.date = date
         self.versions = versions
+        self.dep_fix_date = dep_fix_date
 
 
 class ActualFix(Fix):
     version_type: str | None
-    ttf: timedelta
+    ttx: timedelta
+    ttxa: timedelta | None
     who: str
 
     def __init__(
@@ -30,30 +34,36 @@ class ActualFix(Fix):
         version: list[str],
         version_type: str | None,
         date: datetime,
-        ttf: timedelta,
+        ttx: timedelta,
         who: str,
+        dep_fix_date: datetime | None = None,
+        ttxa: timedelta | None = None,
     ) -> None:
-        super().__init__(sha, date, version)
-        self.version = version
+        super().__init__(sha, date, version, dep_fix_date)
         self.version_type = version_type
-        self.ttf = ttf
+        self.ttx = ttx
+        self.ttxa = ttxa
         self.who = who
 
 
 class PotentialFix(Fix):
     dependencies: bool
-    tff: timedelta
+    ttpf: timedelta
+    ttpfa: timedelta | None
 
     def __init__(
         self,
         sha: str,
         date: datetime,
         versions: list[str],
-        tff: timedelta,
+        ttpf: timedelta,
+        ttpfa: timedelta | None = None,
+        dep_fix_date: datetime | None = None,
         dependencies: bool = False,
     ) -> None:
-        super().__init__(sha, date, versions)
-        self.tff = tff
+        super().__init__(sha, date, versions, dep_fix_date)
+        self.ttpf = ttpf
+        self.ttpfa = ttpfa
         self.dependencies = dependencies
 
 
@@ -91,6 +101,6 @@ class Rugpull:
         if type(self.fix) is ActualFix:
             return "fixed"
         elif type(self.fix) is PotentialFix:
-            return "fixable" if self.fix.dependencies else "dep_fixable"
+            return "dep_fixable" if self.fix.dependencies else "fixable"
         else:
             return "unfixable"

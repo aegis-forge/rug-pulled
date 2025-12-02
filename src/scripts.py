@@ -6,7 +6,11 @@ from pickle import HIGHEST_PROTOCOL, dump
 
 from dotenv import dotenv_values
 from neotime import DateTime
+from numpy import nan
+from pandas import DataFrame, read_csv
 from tqdm import tqdm
+
+from src.helpers.repos import pickle2repo
 
 from .helpers.queries import (
     connect,
@@ -73,5 +77,224 @@ def _get_repos():
             file.close
 
 
+def _get_dataset():
+    df_lines: list[dict[str, str | datetime]] = []
+    filepath: str = join(dirname(abspath(__file__)), "../data/repositories")
+    commit_dates: list[datetime] = []
+
+    for file in tqdm(listdir(filepath)):
+        repo: Repository = pickle2repo(file.removesuffix(".pickle"))
+
+        for workflow_name, workflow in repo.workflows.items():
+            for commit_name, commit in workflow.commits.items():
+                for action_name, action in commit.dependencies["direct"].items():
+                    dependencies = {
+                        dep_name: dep
+                        for dep_name, dep in commit.dependencies["indirect"].items()
+                        if dep.parent == action_name
+                    }
+
+                    for dep_name, dep in dependencies.items():
+                        for vulnerability in dep.vulnerabilities.keys():
+                            df_lines.append(
+                                {
+                                    "repository": repo.name,
+                                    "workflow": workflow_name,
+                                    "commit": commit_name,
+                                    "action": action_name,
+                                    "action_u": str(action.uses),
+                                    "action_v": action.version,
+                                    "action_d": action.date,
+                                    "dependency": dep_name,
+                                    "dependency_v": dep.version,
+                                    "vulnerability": vulnerability,
+                                }
+                            )
+                        else:
+                            df_lines.append(
+                                {
+                                    "repository": repo.name,
+                                    "workflow": workflow_name,
+                                    "commit": commit_name,
+                                    "action": action_name,
+                                    "action_u": str(action.uses),
+                                    "action_v": action.version,
+                                    "action_d": action.date,
+                                    "dependency": dep_name,
+                                    "dependency_v": dep.version,
+                                    "vulnerability": "",
+                                }
+                            )
+                else:
+                    df_lines.append(
+                        {
+                            "repository": repo.name,
+                            "workflow": workflow_name,
+                            "commit": commit_name,
+                            "action": "",
+                            "action_u": "",
+                            "action_v": "",
+                            "action_d": "",
+                            "dependency": "",
+                            "dependency_v": "",
+                            "vulnerability": "",
+                        }
+                    )
+                
+                commit_dates.append(commit.date)
+            else:
+                df_lines.append(
+                    {
+                        "repository": repo.name,
+                        "workflow": workflow_name,
+                        "commit": "",
+                        "action": "",
+                        "action_u": "",
+                        "action_v": "",
+                        "action_d": "",
+                        "dependency": "",
+                        "dependency_v": "",
+                        "vulnerability": "",
+                    }
+                )
+
+    print("Saving...")
+    DataFrame(df_lines).to_csv(join(dirname(abspath(__file__)), "../data/dataset.csv"))
+    DataFrame(commit_dates).to_csv(join(dirname(abspath(__file__)), "../data/commit_dates.csv"))
+    print("DONE")
+
+
+def _precompute_dataset_metrics():
+    print("Loading CSV...")
+    df: DataFrame = read_csv(join(dirname(abspath(__file__)), "../data/dataset.csv"))
+    print("DONE\n")
+
+    df_lines: list[dict[str, str | float | int]] = []
+
+    def gen_line(
+        el: str,
+        min: float,
+        max: float,
+        mean: float,
+        median: float,
+        unique: float,
+        total: int,
+    ) -> dict[str, str | float | int]:
+        return {
+            "element": el,
+            "min": min,
+            "max": max,
+            "mean": mean,
+            "median": median,
+            "unique": unique,
+            "total": total,
+        }
+
+    rs = df["repo"].nunique()
+    df_lines.append(gen_line("repos", nan, nan, nan, nan, nan, int(rs)))
+
+    ws = df[["repo", "workflow"]].drop_duplicates().groupby(by=["repo"]).size()
+    print(ws, "\n")
+    cs = (
+        df[["repo", "workflow", "commit"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow"])
+        .count()
+    )
+    print(cs, "\n")
+    acs = (
+        df[["repo", "workflow", "commit", "action", "action_v", "action_u"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow", "commit"])
+        .sum()
+        .drop(["action", "action_v"], axis=1)
+    )
+    print(acs, "\n")
+    acsv = (
+        df[["repo", "workflow", "commit", "action", "action_v", "action_u"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow", "commit"])
+        .sum()
+        .drop(["action", "action_v"], axis=1)
+    )
+    print(acsv, "\n")
+    ds = (
+        df[["repo", "workflow", "commit", "action", "dependency"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow", "commit", "action"])
+        .count()
+    )
+    print(ds, "\n")
+    dsv = (
+        df[["repo", "workflow", "commit", "action", "dependency", "dependency_v"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow", "commit", "action", "dependency"])
+        .count()
+    )
+    print(dsv, "\n")
+    vsc = (
+        df[["repo", "workflow", "commit", "action", "dependency", "dependency_v"]]
+        .drop_duplicates()
+        .groupby(by=["repo", "workflow", "commit", "action", "dependency"])
+        .count()
+    )
+    print(vsc, "\n")
+    vsa = (
+        df[["repo", "workflow", "commit", "action", "vulnerability"]]
+        .groupby(by=["repo", "workflow", "commit", "action"])
+        .count()
+    )
+    print(vsa, "\n")
+    vs = (
+        df[["repo", "workflow", "commit", "action", "dependency", "vulnerability"]]
+        .groupby(by=["repo", "workflow", "commit", "action", "dependency"])
+        .count()
+    )
+    print(vs, "\n")
+
+    for i, cat in enumerate(
+        zip(
+            [ws, cs, acs, acsv, ds, dsv, vsc, vsa, vs],
+            [
+                "workflow",
+                "commit (per workflow)",
+                "action (per commit)",
+                "action version (per commit)",
+                "dependency (per action)",
+                "dependency version (per action)",
+                "vulnerability (per commit)",
+                "vulnerability (per action)",
+                "vulnerability (per dependency)",
+            ],
+        )
+    ):
+        if i == 3:
+            unique = (df["action"] + "@" + df["action_v"]).dropna().nunique()
+        elif i == 5:
+            unique = (df["dependency"] + "@" + df["dependency_v"]).dropna().nunique()
+        else:
+            unique = int(df[cat[1].split(" (")[0]].dropna().nunique())
+
+        df_lines.append(
+            gen_line(
+                cat[1],
+                int(cat[0].min()),
+                int(cat[0].max()),
+                round(float(cat[0].mean()), 2),
+                int(cat[0].median()),
+                unique,
+                int(cat[0].sum()),
+            )
+        )
+
+    print("Saving...")
+    DataFrame(df_lines).set_index("element").to_csv(
+        join(dirname(abspath(__file__)), "../data/dataset_stats.csv")
+    )
+    print("DONE")
+
+
 if __name__ == "__main__":
-    _get_repos()
+    # _get_repos()
+    _get_dataset()
+    # _precompute_dataset_metrics()

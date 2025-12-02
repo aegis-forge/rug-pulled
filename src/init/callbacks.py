@@ -6,7 +6,6 @@ from dotenv import dotenv_values
 from tqdm import tqdm
 
 from ..helpers.queries import connect, get_repository_workflows, get_workflow_commits
-from ..helpers.repos import pickle2repo
 
 ss = st.session_state
 
