@@ -29,9 +29,13 @@ _ = header_container.title("Kleio")
 
 if len(ss["selected_workflows"]) == 0:
     ss["results_repos"] = {}
+    
+stats, gantts = st.tabs(["Statistics", "Gantt Charts"])
 
 if len(ss["selected_workflows"]) > 0:
-    make_rug_pulls_component()
-    make_gantt_charts()
+    with stats:
+        make_rug_pulls_component()
+    with gantts:
+        make_gantt_charts()
 else:
     st.write("Please select at least one workflow")

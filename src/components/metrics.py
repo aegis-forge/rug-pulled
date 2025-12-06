@@ -4,7 +4,7 @@ from streamlit.delta_generator import DeltaGenerator
 
 def make_metrics_components(
     labels: list[str],
-    values: list[int | float],
+    values: list[int | float | str],
     colors: list[str] | None = None,
     icons: bool | None = None,
     container: DeltaGenerator | None = None,

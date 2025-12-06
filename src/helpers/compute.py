@@ -415,7 +415,7 @@ def compute_rug_pulls() -> DataFrame:
             ]
             
             vulnerable_severities = [
-                f"{dep_name} // {vuln_name} // {vuln["cvss"]}"
+                f"{dep_name} // {vuln["cve"] if vuln["cve"] else vuln_name} // {vuln["cvss"]}"
                 for dep_name, dep in rug_pull.vulnerabilities.items()
                 for vuln_name, vuln in dep.vulnerabilities.items()
             ]
