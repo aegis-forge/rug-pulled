@@ -6,7 +6,6 @@ import streamlit as st
 from numpy import where
 from pandas import DataFrame, concat, read_csv
 from plotly.io import write_image
-from plotly.subplots import make_subplots
 
 from ..components.metrics import make_metrics_components
 from ..components.paging import make_paging_component
@@ -184,9 +183,6 @@ def make_rug_pulls_component() -> None:
     rug_pulls = compute_rug_pulls()
     fixed_df = rug_pulls[rug_pulls["fix_category"] == "fixed"]
     not_fixed_df = rug_pulls[rug_pulls["fix_category"] != "fixed"]
-    fixable_df = not_fixed_df[not_fixed_df["fix_category"] == "fixable"]
-    fixable_deps_df = not_fixed_df[not_fixed_df["fix_category"] == "dep_fixable"]
-    non_fixable_df = rug_pulls[rug_pulls["fix_category"] == "unfixable"]
     dataset = read_csv(join(dirname(abspath(__file__)), "../../data/dataset_stats.csv"))
 
     make_metrics_components(
@@ -223,143 +219,10 @@ def make_rug_pulls_component() -> None:
 
     st.write("##### Plots")
 
-    cols_o = st.columns(3)
-
-    figo1 = ex.scatter(
-        fixed_df.sort_values(by="date"),
-        x="date",
-        y="ttx",
-        color="fix_actor",
-        title="TTX (overall)",
-        color_discrete_map={
-            "Workflow": GRAPH_COLORS["workflow"],
-            "Action": GRAPH_COLORS["action"],
-        },
-    )
-    figo2 = ex.scatter(
-        not_fixed_df.sort_values(by="date"),
-        x="date",
-        y="elapsed",
-        title="OVA (overall)",
-        labels={"elapsed": "ova"},
-        color="fix_category",
-        color_discrete_map={
-            "dep_fixable": GRAPH_COLORS["dependency"],
-            "fixable": GRAPH_COLORS["fixable"],
-            "unfixable": GRAPH_COLORS["unfixable"],
-        },
-    )
-    figo3 = ex.scatter(
-        not_fixed_df[not_fixed_df["fix_category"] != "unfixable"].sort_values(
-            by="date"
-        ),
-        x="date",
-        y="ttpf",
-        title="TTPF (overall)",
-        color="fix_category",
-        color_discrete_map={
-            "dep_fixable": GRAPH_COLORS["dependency"],
-            "fixable": GRAPH_COLORS["fixable"],
-        },
-    )
-
-    figo1.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    figo2.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    figo3.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-
-    cols_o[0].plotly_chart(figo1)
-    cols_o[1].plotly_chart(figo2)
-    cols_o[2].plotly_chart(figo3)
-
-    cols_s = st.columns(3)
-    cols_s[0].plotly_chart(
-        ex.scatter(
-            fixed_df[fixed_df["fix_actor"] == "Workflow"].sort_values(by="date"),
-            x="date",
-            y="ttx",
-            title="TTX (by workflow maint.)",
-            color_discrete_sequence=[GRAPH_COLORS["workflow"]],
-        )
-    )
-    cols_s[1].plotly_chart(
-        ex.scatter(
-            fixable_df.sort_values(by="date"),
-            x="date",
-            y="elapsed",
-            title="OVA (fixable)",
-            labels={"elapsed": "ova"},
-            color_discrete_sequence=[GRAPH_COLORS["fixable"]],
-        )
-    )
-    cols_s[2].plotly_chart(
-        ex.scatter(
-            fixable_df.sort_values(by="date"),
-            x="date",
-            y="ttpf",
-            title="TTPF (fixable)",
-            color_discrete_sequence=[GRAPH_COLORS["fixable"]],
-        )
-    )
-
-    cols_s_2 = st.columns(3)
-    cols_s_2[0].plotly_chart(
-        ex.scatter(
-            fixed_df[fixed_df["fix_actor"] == "Action"].sort_values(by="date"),
-            x="date",
-            y="ttx",
-            title="TTX (by action maint.)",
-            color_discrete_sequence=[GRAPH_COLORS["action"]],
-        )
-    )
-    cols_s_2[1].plotly_chart(
-        ex.scatter(
-            fixable_deps_df.sort_values(by="date"),
-            x="date",
-            y="elapsed",
-            title="OVA (fixable deps.)",
-            labels={"elapsed": "ova"},
-            color_discrete_sequence=[GRAPH_COLORS["dependency"]],
-        )
-    )
-    cols_s_2[2].plotly_chart(
-        ex.scatter(
-            fixable_deps_df.sort_values(by="date"),
-            x="date",
-            y="ttpf",
-            title="TTPF (fixable deps.)",
-            color_discrete_sequence=[GRAPH_COLORS["dependency"]],
-        )
-    )
-
-    cols_s_3 = st.columns(3)
-    cols_s_3[0].empty()
-    cols_s_3[1].plotly_chart(
-        ex.scatter(
-            non_fixable_df.sort_values(by="date"),
-            x="date",
-            y="elapsed",
-            title="OVA (unfixable)",
-            labels={"elapsed": "ova"},
-            color_discrete_sequence=[GRAPH_COLORS["unfixable"]],
-        )
-    )
-    cols_s_3[2].empty()
-
-    # ===========================
-
     fixed = rug_pulls[rug_pulls["fix_category"] == "fixed"]
     not_fixed = rug_pulls[rug_pulls["fix_category"] != "fixed"]
-    fixable = not_fixed[not_fixed["fix_category"] == "fixable"]
-    fixable_deps = not_fixed[not_fixed["fix_category"] == "dep_fixable"]
+    fixable = not_fixed_df[not_fixed_df["fix_category"] != "unfixable"]
     not_fixable = not_fixed[not_fixed["fix_category"] == "unfixable"]
-    workflow_maint = fixed[fixed["fix_actor"] == "Workflow"]
-    action_maint = fixed[fixed["fix_actor"] == "Action"]
 
     make_metrics_components(
         labels=[
@@ -370,38 +233,11 @@ def make_rug_pulls_component() -> None:
             "Std. TTX (days)",
         ],
         values=[
-            int(action_maint["ttx"].min() if len(action_maint["ttx"]) > 0 else 0),
-            int(action_maint["ttx"].max() if len(action_maint["ttx"]) > 0 else 0),
-            int(action_maint["ttx"].median() if len(action_maint["ttx"]) > 0 else 0),
-            round(action_maint["ttx"].mean(), 2) if len(action_maint["ttx"]) > 0 else 0,
-            round(action_maint["ttx"].std(), 2) if len(action_maint["ttx"]) > 0 else 0,
-        ],
-    )
-
-    make_metrics_components(
-        labels=[
-            "Min. OVA (days)",
-            "Max. OVA (days)",
-            "Med. OVA (days)",
-            "MOVA (days)",
-            "Std. OVA (days)",
-        ],
-        values=[
-            int(not_fixable["elapsed"].dropna().min())
-            if len(not_fixable["elapsed"].dropna()) > 0
-            else 0,
-            int(not_fixable["elapsed"].dropna().max())
-            if len(not_fixable["elapsed"].dropna()) > 0
-            else 0,
-            int(not_fixable["elapsed"].dropna().median())
-            if len(not_fixable["elapsed"].dropna()) > 0
-            else 0,
-            round(not_fixable["elapsed"].dropna().mean(), 2)
-            if len(not_fixable["elapsed"].dropna()) > 0
-            else 0,
-            round(not_fixable["elapsed"].dropna().std(), 2)
-            if len(not_fixable["elapsed"].dropna()) > 0
-            else 0,
+            int(fixed["ttx"].min() if len(fixed["ttx"]) > 0 else 0),
+            int(fixed["ttx"].max() if len(fixed["ttx"]) > 0 else 0),
+            int(fixed["ttx"].median() if len(fixed["ttx"]) > 0 else 0),
+            round(fixed["ttx"].mean(), 2) if len(fixed["ttx"]) > 0 else 0,
+            round(fixed["ttx"].std(), 2) if len(fixed["ttx"]) > 0 else 0,
         ],
     )
 
@@ -419,6 +255,33 @@ def make_rug_pulls_component() -> None:
             int(fixable["ttpf"].median()) if len(fixable["ttpf"]) > 0 else 0,
             round(fixable["ttpf"].mean(), 2) if len(fixable["ttpf"]) > 0 else 0,
             round(fixable["ttpf"].std(), 2) if len(fixable["ttpf"]) > 0 else 0,
+        ],
+    )
+
+    make_metrics_components(
+        labels=[
+            "Min. OVA (days)",
+            "Max. OVA (days)",
+            "Med. OVA (days)",
+            "MOVA (days)",
+            "Std. OVA (days)",
+        ],
+        values=[
+            int(not_fixed["elapsed"].dropna().min())
+            if len(not_fixed["elapsed"].dropna()) > 0
+            else 0,
+            int(not_fixed["elapsed"].dropna().max())
+            if len(not_fixed["elapsed"].dropna()) > 0
+            else 0,
+            int(not_fixed["elapsed"].dropna().median())
+            if len(not_fixed["elapsed"].dropna()) > 0
+            else 0,
+            round(not_fixed["elapsed"].dropna().mean(), 2)
+            if len(not_fixed["elapsed"].dropna()) > 0
+            else 0,
+            round(not_fixed["elapsed"].dropna().std(), 2)
+            if len(not_fixed["elapsed"].dropna()) > 0
+            else 0,
         ],
     )
 
@@ -445,6 +308,24 @@ def make_rug_pulls_component() -> None:
     figo21.data[2].name = "TTXa"
     figo21.update_layout(yaxis_title="rug pull count")
 
+    figo21a = ex.scatter(
+        fixed_df.sort_values(by="date"),
+        x="date",
+        y="ttx",
+        color="fix_actor",
+        color_discrete_map={
+            "Workflow": GRAPH_COLORS["workflow"],
+            "Action": GRAPH_COLORS["action"],
+        },
+        labels={
+            "fix_actor": "Actor",
+        },
+    )
+
+    figo21a.data[0].name = "TTXw"
+    figo21a.data[1].name = "TTXa"
+    figo21a.update_layout(yaxis_title="TTX")
+
     figo22 = ex.histogram(
         not_fixed_df.sort_values(by="date"),
         x="elapsed",
@@ -467,6 +348,27 @@ def make_rug_pulls_component() -> None:
     figo22.data[2].name = "OVAa"
     figo22.data[4].name = "OVAu"
     figo22.update_layout(yaxis_title="rug pull count")
+
+    figo22a = ex.scatter(
+        not_fixed_df.sort_values(by="date"),
+        x="date",
+        y="elapsed",
+        labels={
+            "elapsed": "ova",
+            "fix_category": "Type",
+        },
+        color="fix_category",
+        color_discrete_map={
+            "dep_fixable": GRAPH_COLORS["dependency"],
+            "fixable": GRAPH_COLORS["fixable"],
+            "unfixable": GRAPH_COLORS["unfixable"],
+        },
+    )
+
+    figo22a.data[0].name = "OVAj"
+    figo22a.data[1].name = "OVAa"
+    figo22a.data[2].name = "OVAu"
+    figo22a.update_layout(yaxis_title="OVA")
 
     figo23 = ex.histogram(
         not_fixed_df[not_fixed_df["fix_category"] != "unfixable"].sort_values(
@@ -491,19 +393,51 @@ def make_rug_pulls_component() -> None:
     figo23.data[2].name = "TTPFa"
     figo23.update_layout(yaxis_title="rug pull count")
 
+    figo23a = ex.scatter(
+        not_fixed_df[not_fixed_df["fix_category"] != "unfixable"].sort_values(
+            by="date"
+        ),
+        x="date",
+        y="ttpf",
+        color="fix_category",
+        color_discrete_map={
+            "dep_fixable": GRAPH_COLORS["dependency"],
+            "fixable": GRAPH_COLORS["fixable"],
+        },
+        labels={
+            "fix_category": "Type",
+        },
+    )
+
+    figo23a.data[0].name = "TTPFj"
+    figo23a.data[1].name = "TTPFa"
+    figo23a.update_layout(yaxis_title="TTPF")
+
     figo21.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    figo21a.update_layout(
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     figo22.update_layout(
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
+    figo22a.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
     figo23.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    figo23a.update_layout(
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
 
     cols_o2[0].plotly_chart(figo21)
-    cols_o2[1].plotly_chart(figo22)
-    cols_o2[2].plotly_chart(figo23)
+    cols_o2[0].plotly_chart(figo21a)
+    cols_o2[2].plotly_chart(figo22)
+    cols_o2[2].plotly_chart(figo22a)
+    cols_o2[1].plotly_chart(figo23)
+    cols_o2[1].plotly_chart(figo23a)
 
     # ===========================
 
@@ -570,13 +504,14 @@ def make_rug_pulls_component() -> None:
     freqs1 = merged.merge(
         added_freqs, left_on=["rug pulls", "uses"], right_index=True, how="outer"
     ).rename(columns={0: "count"})
+    
+    st.write(actions_popularity.sum())
 
     fign = ex.scatter(
         freqs1,
         y="rug pulls",
         x="uses",
-        color="count",
-        color_continuous_scale=[GRAPH_COLORS["commit"], GRAPH_COLORS["action"]],
+        color_discrete_sequence=[GRAPH_COLORS["workflow"]],
         labels={
             "rug pulls": "# rug pulled Actions",
             "uses": "# used Actions",
@@ -601,7 +536,7 @@ def make_rug_pulls_component() -> None:
         y="rp versions",
         x="versions",
         color="count",
-        color_continuous_scale=[GRAPH_COLORS["commit"], GRAPH_COLORS["action"]],
+        color_continuous_scale=[GRAPH_COLORS["workflow"], GRAPH_COLORS["action"]],
         labels={
             "rp versions": "# rug pulled versions",
             "versions": "# used versions",
@@ -663,16 +598,6 @@ def make_rug_pulls_component() -> None:
     st.plotly_chart(fig)
     st.plotly_chart(fig1)
 
-    # fig1.update_layout(
-    #     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    # )
-
-    # fig1.update_layout(yaxis_title="% rug pull")
-    # fig1.update_xaxes(showgrid=False, zeroline=False)
-    # fig1.update_yaxes(showgrid=True, zeroline=False)
-
-    # write_image(fig1, "./dir-ind-2.pdf", format="pdf")
-
     _ = st.plotly_chart(fig3, key="hist")
 
     fig.update_layout(
@@ -692,7 +617,15 @@ def make_rug_pulls_component() -> None:
 
     direct_indirect_df = (
         rug_pulls.explode("vulns_list")[
-            ["action", "vulns_list", "vulns_severities", "date"]
+            [
+                "action",
+                "vulns_list",
+                "vulns_severities",
+                "date",
+                "fix_category",
+                "fix_actor",
+                "version",
+            ]
         ]
         .explode("vulns_severities")
         .sort_values(by="date")
@@ -774,27 +707,87 @@ def make_rug_pulls_component() -> None:
         ],
     )
 
-    st.plotly_chart(
-        ex.histogram(
-            direct_indirect_df[direct_indirect_df["severity"] > 0.0]["severity"],
-            x="severity",
-            marginal="box",
-        )
+    direct_indirect_df["fix_actor"] = direct_indirect_df["fix_actor"].fillna("")
+    direct_indirect_df["fix_category"] = (
+        direct_indirect_df["fix_category"] + " " + direct_indirect_df["fix_actor"]
+    )
+
+    histo = ex.histogram(
+        direct_indirect_df[direct_indirect_df["severity"] > 0.0],
+        x="severity",
+        color="fix_category",
+        color_discrete_sequence=[
+            GRAPH_COLORS["workflow"],
+            GRAPH_COLORS["action"],
+            GRAPH_COLORS["dependency"],
+            GRAPH_COLORS["fixable"],
+            GRAPH_COLORS["unfixable"],
+        ],
+        nbins=16,
+        labels={
+            "severity": "CVSS",
+            "fix_category": "Category",
+        },
+    )
+
+    histo.data[0].name = "Fixed (Workflow)"
+    histo.data[1].name = "Fixed (Action)"
+    histo.data[2].name = "Fixable (JS Dep.)"
+    histo.data[3].name = "Fixable (Action)"
+    histo.data[4].name = "Unfixable"
+    histo.update_layout(yaxis_title="# used dependencies")
+    histo.update_xaxes(range=[0, 10.0])
+
+    histo.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    st.plotly_chart(histo)
+    
+    # histo.update_layout(
+    #     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    # )
+
+    # histo.update_layout(yaxis_title="% rug pull")
+    histo.update_xaxes(showgrid=False, zeroline=False)
+    histo.update_yaxes(showgrid=True, zeroline=False)
+
+    write_image(histo, "./cvss-histo.pdf", format="pdf")
+
+    sev_horizontal = st.container(horizontal=True)
+
+    gt0 = direct_indirect_df[direct_indirect_df["severity"] > 0.0]
+    gt0["rp"] = gt0["action"] + gt0["version"] + gt0["date"].apply(str)
+    gt0 = gt0.groupby(by="severity")["rp"].apply(set).apply(lambda x: len(x)).reset_index()
+
+    sev_horizontal.text(
+        f"Low: {gt0[(gt0['severity'] >= 0.1) & (gt0['severity'] <= 3.99)]["rp"].sum()}"
+    )
+    sev_horizontal.text(
+        f"Medium: {gt0[(gt0['severity'] >= 3.0) & (gt0['severity'] <= 6.99)]["rp"].sum()}"
+    )
+    sev_horizontal.text(
+        f"High: {gt0[(gt0['severity'] >= 7.0) & (gt0['severity'] <= 8.99)]["rp"].sum()}"
+    )
+    sev_horizontal.text(
+        f"Critical: {gt0[(gt0['severity'] >= 9.0) & (gt0['severity'] <= 10.0)]["rp"].sum()}"
+    )
+
+    figo21.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
 
     cves_cols = st.columns(2)
 
     cves = (
-        direct_indirect_df[direct_indirect_df["used as"] == "direct"][["cve", "vuln"]]
+        direct_indirect_df[["cve", "vuln"]]
         .groupby(by="vuln")["cve"]
         .apply(set)
         .reset_index()
         .set_index("vuln")
     )
     sevs = (
-        direct_indirect_df[direct_indirect_df["used as"] == "direct"][
-            ["vuln", "severity"]
-        ]
+        direct_indirect_df[["vuln", "severity"]]
         .groupby(by="vuln")["severity"]
         .apply(set)
         .reset_index()
@@ -821,7 +814,7 @@ def make_rug_pulls_component() -> None:
         .sort_values(ascending=False)
     )
     total_df = (
-        direct_indirect_df[["cve", "severity", "vuln"]]
+        direct_indirect_df[["cve", "severity", "vulns_list"]]
         .value_counts()
         .sort_values(ascending=False)
     )
