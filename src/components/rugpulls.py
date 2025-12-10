@@ -439,6 +439,48 @@ def make_rug_pulls_component() -> None:
     cols_o2[1].plotly_chart(figo23)
     cols_o2[1].plotly_chart(figo23a)
 
+    rug_pulls_mod = rug_pulls.copy()
+    rug_pulls_mod["fix_category"] = (
+        rug_pulls_mod["fix_category"] + " " + rug_pulls_mod["fix_actor"].fillna("")
+    )
+    rug_pulls_mod["year"] = rug_pulls["date"].apply(lambda x: x.year)
+    rug_pulls_mod["days"] = rug_pulls["ttx"].fillna(rug_pulls["elapsed"])
+
+    histo_years = ex.box(
+        rug_pulls_mod,
+        x="year",
+        y="elapsed",
+        color="fix_category",
+        orientation="v",
+        color_discrete_map={
+            "unfixable ": GRAPH_COLORS["unfixable"],
+            "fixed Workflow": GRAPH_COLORS["workflow"],
+            "fixed Action": GRAPH_COLORS["action"],
+            "fixable ": GRAPH_COLORS["fixable"],
+            "dep_fixable ": GRAPH_COLORS["dependency"],
+        },
+        labels={"fix_category": "Category"},
+    )
+
+    histo_years.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    histo_years.data[0].name = "OVAu"
+    histo_years.data[1].name = "TTXw"
+    histo_years.data[2].name = "TTXa"
+    histo_years.data[3].name = "OVAa"
+    histo_years.data[4].name = "OVAj"
+
+    histo_years.update_layout(yaxis_title="age")
+
+    histo_years.update_xaxes(showgrid=False, zeroline=False)
+    histo_years.update_yaxes(showgrid=True, zeroline=False)
+
+    # write_image(histo_years, "./years-histo.pdf", format="pdf", width=800)
+
+    st.plotly_chart(histo_years)
+
     # ===========================
 
     deps_df = rug_pulls.explode("vulns_list")
@@ -504,8 +546,6 @@ def make_rug_pulls_component() -> None:
     freqs1 = merged.merge(
         added_freqs, left_on=["rug pulls", "uses"], right_index=True, how="outer"
     ).rename(columns={0: "count"})
-    
-    st.write(actions_popularity.sum())
 
     fign = ex.scatter(
         freqs1,
@@ -678,39 +718,50 @@ def make_rug_pulls_component() -> None:
         ],
     )
 
-    make_metrics_components(
-        labels=[
-            "Min. CVSS Score",
-            "Max. CVSS Score",
-            "Med. CVSS Score",
-            "Mean CVSS Score",
-            "Std. CVSS Score",
-        ],
-        values=[
-            direct_indirect_df[direct_indirect_df["severity"] > 0.0]["severity"].min(),
-            direct_indirect_df[direct_indirect_df["severity"] > 0.0]["severity"].max(),
-            direct_indirect_df[direct_indirect_df["severity"] > 0.0][
-                "severity"
-            ].median(),
-            round(
-                direct_indirect_df[direct_indirect_df["severity"] > 0.0][
-                    "severity"
-                ].mean(),
-                2,
-            ),
-            round(
-                direct_indirect_df[direct_indirect_df["severity"] > 0.0][
-                    "severity"
-                ].std(),
-                2,
-            ),
-        ],
-    )
-
     direct_indirect_df["fix_actor"] = direct_indirect_df["fix_actor"].fillna("")
     direct_indirect_df["fix_category"] = (
         direct_indirect_df["fix_category"] + " " + direct_indirect_df["fix_actor"]
     )
+
+    st.dataframe(direct_indirect_df)
+
+    for name, filter in zip(
+        ["", "(Fixed W.)", "(Fixed A.)", "(Fixable J.)", "(Fixable A.)", "(Unfixable)"],
+        [
+            "",
+            "fixed Workflow",
+            "fixed Action",
+            "dep_fixable ",
+            "fixable ",
+            "unfixable ",
+        ],
+    ):
+        df_cvss = direct_indirect_df[
+            (direct_indirect_df["severity"] > 0.0)
+            & (direct_indirect_df["fix_category"] == filter)
+        ]["severity"]
+
+        if filter == "":
+            df_cvss = direct_indirect_df[direct_indirect_df["severity"] > 0.0][
+                "severity"
+            ]
+
+        make_metrics_components(
+            labels=[
+                f"Min. CVSS Score {name}",
+                f"Max. CVSS Score {name}",
+                f"Med. CVSS Score {name}",
+                f"Mean CVSS Score {name}",
+                f"Std. CVSS Score {name}",
+            ],
+            values=[
+                df_cvss.min(),
+                df_cvss.max(),
+                df_cvss.median(),
+                round(df_cvss.mean(), 2),
+                round(df_cvss.std(), 2),
+            ],
+        )
 
     histo = ex.histogram(
         direct_indirect_df[direct_indirect_df["severity"] > 0.0],
@@ -720,21 +771,22 @@ def make_rug_pulls_component() -> None:
             GRAPH_COLORS["workflow"],
             GRAPH_COLORS["action"],
             GRAPH_COLORS["dependency"],
-            GRAPH_COLORS["fixable"],
             GRAPH_COLORS["unfixable"],
+            GRAPH_COLORS["fixable"],
         ],
         nbins=16,
         labels={
             "severity": "CVSS",
             "fix_category": "Category",
         },
+        marginal="box",
     )
 
     histo.data[0].name = "Fixed (Workflow)"
-    histo.data[1].name = "Fixed (Action)"
-    histo.data[2].name = "Fixable (JS Dep.)"
-    histo.data[3].name = "Fixable (Action)"
-    histo.data[4].name = "Unfixable"
+    histo.data[2].name = "Fixed (Action)"
+    histo.data[4].name = "Fixable (JS Dep.)"
+    histo.data[6].name = "Unfixable"
+    histo.data[8].name = "Fixable (Action)"
     histo.update_layout(yaxis_title="# used dependencies")
     histo.update_xaxes(range=[0, 10.0])
 
@@ -742,35 +794,44 @@ def make_rug_pulls_component() -> None:
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
 
+    # fign.update_layout(yaxis_title="% rug pull")
+    # histo.update_xaxes(showgrid=False, zeroline=False)
+    # histo.update_yaxes(showgrid=True, zeroline=False)
+
+    # write_image(histo, "./cvss-histo.pdf", format="pdf")
+
     st.plotly_chart(histo)
-    
-    # histo.update_layout(
-    #     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    # )
 
-    # histo.update_layout(yaxis_title="% rug pull")
-    histo.update_xaxes(showgrid=False, zeroline=False)
-    histo.update_yaxes(showgrid=True, zeroline=False)
-
-    write_image(histo, "./cvss-histo.pdf", format="pdf")
-
-    sev_horizontal = st.container(horizontal=True)
+    def get_group(cvss) -> str:
+        if 0.1 < cvss <= 3.99:
+            return "low"
+        elif 4.0 < cvss <= 6.99:
+            return "medium"
+        elif 7.0 < cvss <= 8.99:
+            return "high"
+        elif 9.0 < cvss <= 10.0:
+            return "critical"
+        else:
+            return ""
 
     gt0 = direct_indirect_df[direct_indirect_df["severity"] > 0.0]
-    gt0["rp"] = gt0["action"] + gt0["version"] + gt0["date"].apply(str)
-    gt0 = gt0.groupby(by="severity")["rp"].apply(set).apply(lambda x: len(x)).reset_index()
+    gt0["rp"] = gt0["action"] + gt0["date"].apply(str)
+    gt0["group"] = gt0["severity"].apply(lambda x: get_group(x))
+    gt0.drop_duplicates(inplace=True)
 
-    sev_horizontal.text(
-        f"Low: {gt0[(gt0['severity'] >= 0.1) & (gt0['severity'] <= 3.99)]["rp"].sum()}"
+    st.plotly_chart(
+        ex.histogram(
+            gt0[gt0["group"] != ""],
+            x="group",
+            color="fix_category",
+        )
     )
-    sev_horizontal.text(
-        f"Medium: {gt0[(gt0['severity'] >= 3.0) & (gt0['severity'] <= 6.99)]["rp"].sum()}"
-    )
-    sev_horizontal.text(
-        f"High: {gt0[(gt0['severity'] >= 7.0) & (gt0['severity'] <= 8.99)]["rp"].sum()}"
-    )
-    sev_horizontal.text(
-        f"Critical: {gt0[(gt0['severity'] >= 9.0) & (gt0['severity'] <= 10.0)]["rp"].sum()}"
+
+    st.write(
+        f"Low: {len(gt0[gt0["group"] == "low"])} // ",
+        f"Medium: {len(gt0[gt0["group"] == "medium"])} // ",
+        f"High: {len(gt0[gt0["group"] == "high"])} // ",
+        f"Critical: {len(gt0[gt0["group"] == "critical"])}",
     )
 
     figo21.update_layout(

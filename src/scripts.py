@@ -107,6 +107,7 @@ def _get_dataset():
                                     "action_d": action.date,
                                     "dependency": dep_name,
                                     "dependency_v": dep.version,
+                                    "dependency_t": dep.subtype,
                                     "vulnerability": vulnerability,
                                 }
                             )
@@ -122,6 +123,7 @@ def _get_dataset():
                                     "action_d": action.date,
                                     "dependency": dep_name,
                                     "dependency_v": dep.version,
+                                    "dependency_t": dep.subtype,
                                     "vulnerability": "",
                                 }
                             )
@@ -137,6 +139,7 @@ def _get_dataset():
                             "action_d": "",
                             "dependency": "",
                             "dependency_v": "",
+                            "dependency_t": "",
                             "vulnerability": "",
                         }
                     )
@@ -154,6 +157,7 @@ def _get_dataset():
                         "action_d": "",
                         "dependency": "",
                         "dependency_v": "",
+                        "dependency_t": "",
                         "vulnerability": "",
                     }
                 )
