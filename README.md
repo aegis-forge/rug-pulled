@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
-# kleio-webapp
+# rug-pulled
 
 ## Export Conda Dependencies
 
