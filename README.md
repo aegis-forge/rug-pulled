@@ -1,9 +1,3 @@
-<p align="center">
-  <img width="100" src="static/vectors/logo-full.svg" alt="kleio logo"> <br><br>
-  <img src="https://img.shields.io/badge/streamlit-v1.50.0-red" alt="Go version">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
-</p>
-
 # rug-pulled
 
 ## Export Conda Dependencies
