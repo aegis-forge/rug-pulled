@@ -40,7 +40,7 @@ Finally everything contained in `data/` is used as input by the webapp to displa
 
 ## Publications
 
-Kleio was used in the following research papers:
+This repository serves as the replication package for the following paper:
 
 - Riggio, E. and Pautasso C. (2026). Changing Nothing, Yet Changing Everything: Exploring Rug Pulls in GitHub Workflows. Proceedings of the 23rd IEEE International Conference on Software Architecture (ICSA), IEEE, in press
 
