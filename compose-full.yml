@@ -1,0 +1,81 @@
+services:
+  webapp:
+    image: rug-pulled:latest
+    volumes:
+      - ./data:/app/data
+    networks:
+      - webapp
+    ports:
+      - "8501:8501"
+  
+  crawler:
+    # image: kleio:latest
+    # image: ghcr.io/aegis-forge/kleio:1.0.0
+    image: aegisforge/kleio:1.0.0
+    env_file: ".env"
+    volumes:
+      - ./repositories.txt:/kleio/repositories.txt
+    networks:
+      - crawler
+    depends_on:
+      neo:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+
+  neo:
+    image: neo4j:5.26.9
+    env_file: ".env"
+    environment:
+      - NEO4J_AUTH=${NEO_USER}/${NEO_PASS}
+    volumes:
+      - neo4j-logs:/logs
+      - neo4j-config:/config
+      - neo4j-data:/data
+      - neo4j-plugins:/plugins
+    networks:
+      - webapp
+      - crawler
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    restart: always
+    healthcheck:
+      test: wget http://localhost:7474 || exit 1
+      interval: 1s
+      timeout: 10s
+      retries: 10
+      start_period: 3s
+
+  mongo:
+    image: mongodb/mongodb-community-server:8.0-ubi8
+    env_file: ".env"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASS}
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - crawler
+    ports:
+      - "27017:27017"
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 1s
+      timeout: 10s
+      retries: 10
+      start_period: 3s
+
+networks:
+  webapp:
+    driver: bridge
+  crawler:
+    driver: bridge
+
+volumes:
+  neo4j-logs:
+  neo4j-config:
+  neo4j-data:
+  neo4j-plugins:
+  mongodb-data:

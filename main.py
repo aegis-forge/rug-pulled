@@ -25,7 +25,7 @@ _ = header_container.image(
     image=join(dirname(abspath(__file__)), "./static/vectors/logo.svg"),
     width=100,
 )
-_ = header_container.title("Kleio")
+_ = header_container.title("Rug Pulled")
 
 if len(ss["selected_workflows"]) == 0:
     ss["results_repos"] = {}

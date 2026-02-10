@@ -8,7 +8,7 @@ from ..helpers.repos import get_repo_names
 
 def init_session_variables() -> None:
     st.set_page_config(
-        page_title="kleio",
+        page_title="rug pulled",
         page_icon="./static/vectors/favicon.svg",
         layout="wide",
     )

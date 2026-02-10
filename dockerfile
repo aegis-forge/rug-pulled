@@ -1,4 +1,4 @@
-FROM continuumio/miniconda3:25.1.1-0
+FROM continuumio/miniconda3:v25.11.1
 
 WORKDIR /app
 
@@ -8,9 +8,8 @@ COPY . .
 RUN conda env create -f environment.yml
 
 # Activate the conda environment
-SHELL ["conda", "run", "-n", "kleio", "/bin/bash", "-c"]
+SHELL ["conda", "run", "-n", "rug-pulled", "/bin/bash", "-c"]
 
-# Expose port, healthcheck and start service
 EXPOSE 8501
 
-ENTRYPOINT ["conda", "run", "-n", "kleio", "streamlit", "run", "main.py"]
+ENTRYPOINT ["conda", "run", "-n", "rug-pulled", "streamlit", "run", "main.py"]

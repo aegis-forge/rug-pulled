@@ -1,4 +1,4 @@
-name: kleio
+name: rug-pulled
 channels:
   - defaults
 dependencies:
