@@ -30,7 +30,7 @@ The data was created by using the methods contained in `src/scripts.py`. To use 
 
 The following figure describes the dataflow of both Kleio and the webapp used to display the results (`aegis-forge/kleio` contains detailed documentation of its architecture, as well as neo4j and mongodb structures).
 
-![data flow](./assets/flow.drawio.pdf)
+![data flow](./assets/flow.png)
 
 The extraction part of the flow is carried out by Kleio itself. The data extracted from the workflows, components (GHAs), and vulnerabilities is then saved in a Neo4j database.
 
