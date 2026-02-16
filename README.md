@@ -4,7 +4,7 @@
 
 ### Dataset
 
-To correctly display the statistics and Gantt charts, make sure that there is a populated `data/` directory at the root of the repository. If you are downloading this repository from [Figshare](https://doi.org/10.6084/m9.figshare.30734789), then you can skip this step, since the `data/` directory is already provided. However, if you have downloaded this repository from GitHub, you will need to download the `data/` directory by navigating to [Figshare](https://doi.org/10.6084/m9.figshare.30734789) and downloading the `data.zip` archive. Once downloaded, extract it in the root of this repository.
+To correctly display the statistics and Gantt charts, make sure that there is a populated `data/` directory at the root of the repository. If you are downloading this repository from [Figshare](https://doi.org/10.6084/m9.figshare.30734789.v1), then you can skip this step, since the `data/` directory is already provided. However, if you have downloaded this repository from GitHub, you will need to download the `data/` directory by navigating to [Figshare](https://doi.org/10.6084/m9.figshare.30734789.v1) and downloading the `data.zip` archive. Once downloaded, extract it in the root of this repository.
 
 ```
 rug-pulled
